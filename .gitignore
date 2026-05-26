@@ -18,6 +18,7 @@ logs/
 # slack-bridge 민감 파일
 slack-bridge/-B-*.env
 slack-bridge/-B-*.py
+slack-bridge/app-B-*.py
 slack-bridge/state/
 
 # slack-bot
