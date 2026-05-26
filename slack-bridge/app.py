@@ -203,24 +203,19 @@ def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, 
 
     if NEW_TOPIC_TRIGGER in text:
         task_desc = text.replace(NEW_TOPIC_TRIGGER, "", 1).strip(" -:·")
-        if not task_desc:
-            say("업무 설명을 함께 입력해 주세요. 예) `신규 주제 2026년 전기차 시장 리서치`", **say_kwargs)
-            return
-        slug = slugify(task_desc)
-        say(
-            text=f"✅ 시작: `{slug}`\n> {task_desc}\n저장 경로: `output/{slug}/`",
-            **say_kwargs,
-        )
-        _start_new_task(slug, task_desc, channel, thread_ts, user, client)
+    else:
+        task_desc = text
+
+    if not task_desc:
+        say("업무 내용을 입력해 주세요. 예) `바로고 배달 시장 분석해줘`", **say_kwargs)
         return
 
+    slug = slugify(task_desc)
     say(
-        f"사용법:\n"
-        f"• `{NEW_TOPIC_TRIGGER} <업무 설명>` — 새 워크스페이스 시작\n"
-        f"• 실행 중 스레드에서 그냥 멘션하면 후속 지시로 접수됩니다\n"
-        f"• `슬러그: <kebab-case>` — 슬러그 수정 대기 중일 때 회신",
+        text=f"✅ 시작: `{slug}`\n> {task_desc}\n저장 경로: `output/{slug}/`",
         **say_kwargs,
     )
+    _start_new_task(slug, task_desc, channel, thread_ts, user, client)
 
 
 def _slug_confirm_blocks(approval_id: str, slug: str, task: str) -> list[dict]:
