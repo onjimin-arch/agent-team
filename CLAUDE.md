@@ -137,6 +137,26 @@ AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 - `design`: alpha · zeta
 - `github-plan`: eta · alpha · beta
 
+### github-plan 타입의 특별 처리 규칙
+**매우 중요**: `github-plan` 타입이 감지되면 **반드시** 다음 선행 단계를 거쳐야 합니다:
+
+1. **Member-eta**(GitHub Researcher) 선행 실행
+   - GitHub에서 관련 오픈소스 레포지토리 5 개 이상 검색
+   - 각 레포의 라이선스 (MIT/Apache/GPL/BSL 등) 감사
+   - 주요 기능과 아키텍처 분석
+   - 표절 위험이 있는 코드 스니펫 식별
+
+2. **Member-alpha** (분석) - 2 차 분석
+   - Eta 의 보고서를 바탕으로 구현 방향성 분석
+   - 어떤 기능을 참조하고 어떤 기능을 독창적으로 구현할지 제안
+   - 라이선스 리스크가 있는 경우 대안 제시
+
+3. **Member-beta** (보고서) - 최종 계획서
+   - 앞선 분석을 종합하여 구현 로드맵 작성
+   - 어떤 오픈소스를 얼마나 참조할지 명문화
+
+위 단계를 거치지 않은 `github-plan` 타입 작업은 **규약 위반**입니다.
+
 ### 1-1. Task 분해
 1. Analyze the user task description.
 2. Decompose the task into assignments matching each **활성 멤버**'s role (비활성 멤버에게는 작업을 배정하지 않음).

@@ -55,6 +55,13 @@ _allowed_raw = (
 )
 ALLOWED_USERS = {u.strip() for u in _allowed_raw.split(",") if u.strip()}
 
+# 인사말 패턴 (이모지 및 일반 인사)
+_GREETING_PATTERNS = [
+r"^안녕", r"^반가워", r"^하이", r"^안녕하세", r"^여러", r"^오늘",
+r"^hello", r"^hi", r"^hey", r"^good morning", r"^good afternoon", r"^good evening",
+r"^ㅈㅓ", r"^ㅇㅈ", r"^ㅎㅇ", r"^[👋😀😄😁]",
+]
+
 def _load_new_topic_trigger() -> str:
     config_path = Path(__file__).parent.parent / ".claude" / "configs" / "team-config.yaml"
     try:
@@ -93,8 +100,8 @@ def _post(client, channel: str, thread_ts: str | None, **kwargs):
 def on_message(event, say, client):
     """DM 메시지 — 슬러그 대기 소비 → 스레드 follow-up → '신규 주제' 트리거 순으로 판별."""
     log.info("on_message 수신: channel_type=%s subtype=%s bot_id=%s text=%r",
-             event.get("channel_type"), event.get("subtype"), event.get("bot_id"),
-             (event.get("text") or "")[:80])
+        event.get("channel_type"), event.get("subtype"), event.get("bot_id"),
+        (event.get("text") or "")[:80])
     if event.get("channel_type") != "im" or event.get("subtype") or event.get("bot_id"):
         log.info("on_message 필터 통과 실패 — 무시")
         return
@@ -107,12 +114,15 @@ def on_message(event, say, client):
     # DM 도 봇 답장은 스레드화해서 맥락을 붙잡는다 (사용자 원 메시지 ts = 스레드 root)
     thread_ts = event.get("thread_ts") or event.get("ts")
 
+    # 1. 슬러그 대기 소비 (슬러그 수정 대기 중이면 소비)
     if _consume_slug_wait(user, text, channel, client):
         return
 
+    # 2. 스레드 follow-up (기존 태스크 계속)
     if _route_thread_followup(event, client, text, channel, thread_ts, user):
         return
 
+    # 3. 새로운 명령어 처리
     _handle_trigger(event, say, text, channel, thread_ts, user, client)
 
 
@@ -198,21 +208,95 @@ def _cancel_and_wait(task_id: str, client, channel: str, thread_ts: str | None, 
 
 # ---------- '신규 주제' 트리거 ----------
 
+def _is_greeting(text: str) -> bool:
+    """인사말인지 판별 (대소문자 구분 없이 매칭)."""
+    text_lower = text.lower().strip()
+    for pattern in _GREETING_PATTERNS:
+        if re.match(pattern, text_lower):
+            return True
+    return False
+
+def _is_command(text: str) -> tuple[bool, str]:
+    """
+    명령어인지 판별.
+    반환: (명령어여부, 태스크타입: 'research' | 'dev' | 'github-plan' | 'auto')
+    
+    규칙:
+    - '[AUTO:' → auto
+    - '새 작업', '리서치', '보고서', '분석', '시장' → research (research-report)
+    - '개발', '코드', '버그', '수정', '배포', '기능 추가', '리팩토링' → github-plan (선행 오픈소스 리서치 필수)
+    - 그 외 → False (명령어 아님)
+    """
+    text_lower = text.lower()
+    
+    # AUTO 모드 감지
+    if '[AUTO:' in text:
+        return True, 'auto'
+    
+    # 명시적 키워드 감지 - 반드시 명시적인 키워드가 있어야 함
+    research_keywords = ['새 작업', '새로운 작업', '리서치', '보고서', '분석', '시장', '연구', '조사', '정책', '현황', '조사해', '분석해']
+    
+    # 개발 관련 키워드는 무조건 github-plan 타입으로 분기 (선행 리서치 필수)
+    github_plan_keywords = ['개발', '코드', '버그', '수정', '배포', '기능 추가', '리팩토링', 'pr', '풀리퀘', '개발해', '코드작성', '디버깅', '커스터마이징', '커스텀', '제작', '만들기', '게임', '앱', '웹', '서비스']
+    
+    # 각 키워드 매칭 카운트
+    research_count = sum(1 for kw in research_keywords if kw in text_lower)
+    github_plan_count = sum(1 for kw in github_plan_keywords if kw in text_lower)
+    
+    # 점수가 0 이이면 명령어가 아님
+    if research_count == 0 and github_plan_count == 0:
+        return False, ''
+    
+    # 개발 관련 키워드가 하나라도 매칭되면 무조건 github-plan 으로 (선행 리서치 강제)
+    if github_plan_count > 0:
+        return True, 'github-plan'
+    
+    # 그 외는 research
+    return True, 'research'
+
 def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, user: str, client) -> None:
     say_kwargs = {"thread_ts": thread_ts} if thread_ts else {}
-
+    
+    # 1. 인사말 체크
+    if _is_greeting(text):
+        # 인사말에는 간단한 답만
+        _post(client, channel, thread_ts, text="안녕하세요! 무엇을 도와드릴까요?\n\n명령 예시:\n• `새 작업 2026 년 시장 분석`\n• `개발: 로그인 버그 수정`")
+        return
+    
+    # 2. 명령어 파싱
+    is_cmd, task_type = _is_command(text)
+    
+    # 3. NEW_TOPIC_TRIGGER 가 있으면 기존 로직 유지
     if NEW_TOPIC_TRIGGER in text:
         task_desc = text.replace(NEW_TOPIC_TRIGGER, "", 1).strip(" -:·")
-    else:
-        task_desc = text
-
-    if not task_desc:
-        say("업무 내용을 입력해 주세요. 예) `바로고 배달 시장 분석해줘`", **say_kwargs)
+        slug = slugify(task_desc)
+        say(
+            text=f"✅ 시작: `{slug}`\n> {task_desc}\n저장 경로: `output/{slug}/`",
+            **say_kwargs,
+        )
+        _start_new_task(slug, task_desc, channel, thread_ts, user, client)
         return
-
+    
+    # 4. 그 외 명령어 처리
+    if not is_cmd:
+        # 명령어가 아니면 응답 안 함
+        return
+    
+    # 5. 태스크 타입별 처리
+    task_desc = text
     slug = slugify(task_desc)
+    
+    # 타입별 아이콘 및 라벨
+    type_config = {
+        'research': ('📊', '리서치', '기존 오픈소스 분석 없이 진행'),
+        'github-plan': ('🔍', '오픈소스 리서치', '선행 오픈소스 검색 → 분석 → 개발 착수'),
+        'dev': ('💻', '개발', '즉시 개발 착수'),
+        'auto': ('🤖', '오토', '자동 모드')
+    }
+    emoji, label, note = type_config.get(task_type, ('❓', '알 수 없음', ''))
+    
     say(
-        text=f"✅ 시작: `{slug}`\n> {task_desc}\n저장 경로: `output/{slug}/`",
+        text=f"{emoji} {label} 작업 시작: `{slug}`\n> {task_desc}\n\n📋 **처리 방식**: {note}\n저장 경로: `output/{slug}/`",
         **say_kwargs,
     )
     _start_new_task(slug, task_desc, channel, thread_ts, user, client)

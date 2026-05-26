@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Recurse -Path \"c:\\\\Users\\\\이지민\\\\OneDrive - 바로고\\\\문서\\\\클로드 코드 에이전트\\\\agent-team\" -Force | ForEach-Object { $_.FullName.Replace\\(\"c:\\\\Users\\\\이지민\\\\OneDrive - 바로고\\\\문서\\\\클로드 코드 에이전트\\\\agent-team\\\\\", \"\"\\) } | Sort-Object)",
+      "PowerShell($basePath = \"c:\\\\Users\\\\이지민\\\\OneDrive - 바로고\\\\문서\\\\클로드 코드 에이전트\\\\agent-team\"; Get-ChildItem -Recurse -Path $basePath -Force | Where-Object { $_.PSIsContainer -eq $false } | ForEach-Object { $_.FullName.Replace\\($basePath + \"\\\\\", \"\"\\) } | Sort-Object)",
+      "PowerShell(tree /A /F $basePath 2>$null)",
+      "PowerShell($basePath = \"c:\\\\Users\\\\������\\\\OneDrive - �ٷΰ�\\\\����\\\\Ŭ�ε� �ڵ� ������Ʈ\\\\agent-team\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\이지민\\\\OneDrive - 바로고\\\\문서\\\\클로드 코드 에이전트\\\\agent-team\\\\.claude\\\\agents\\\\member-epsilon\")",
+      "Bash(Remove-Item \"c:\\\\Users\\\\이지민\\\\OneDrive - 바로고\\\\문서\\\\클로드 코드 에이전트\\\\agent-team\\\\NEXT.md\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\이지민\\OneDrive - 바로고\\문서\\클로드 코드 에이전트\\agent-team\\.claude\\agents",
+      "c:\\Users\\������\\OneDrive - �ٷΰ�\\����\\Ŭ�ε� �ڵ� ������Ʈ\\agent-team"
+    ]
+  }
+}

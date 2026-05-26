@@ -1,0 +1,158 @@
+task:
+  name: "sample-research-and-report"
+  description: "Perform a structured research analysis and produce a final report."
+  input_description: "사용자가 제공한 업무 설명과 참고 자료를 바탕으로 리서치, 분석, 최종 보고서를 작성합니다."
+  final_output:
+    format: "md"
+    description: "최종 통합 보고서"
+
+  # 팀장이 사용자 요청 문장에서 자동 판별할 task 유형.
+  # 아래 trigger 키워드가 포함되면 해당 type 으로 분기.
+  # 매칭이 없으면 default 사용.
+  types:
+    - name: "research-report"
+      default: true
+      members: ["member-alpha", "member-beta", "member-gamma", "member-delta"]
+      triggers: ["리서치", "분석", "보고서", "시장", "정책", "현황", "research", "report"]
+      description: "리서치/분석 보고서. alpha 조사 → gamma 팩트체크 → delta 시각화 → beta 보고서 작성."
+    - name: "code-review"
+      members: ["member-alpha", "member-gamma", "member-beta"]
+      triggers: ["코드 리뷰", "PR", "풀리퀘", "code review", "리뷰해"]
+      description: "코드/PR 리뷰. alpha 가 코드 스캔, gamma 가 논리·보안 검증, beta 가 리뷰 요약."
+    - name: "multilingual-brief"
+      members: ["member-alpha", "member-beta", "member-delta"]
+      triggers: ["영문", "번역", "다국어", "english", "translate", "브리프"]
+      description: "다국어 브리프. alpha 조사 → beta 요약 → delta 시각자료(이 유형에서는 번역은 delta 가 보조)."
+    - name: "dev"
+      members: ["member-alpha", "member-epsilon"]
+      triggers: ["개발", "코드", "배포", "수정", "버그", "기능 추가", "implement", "deploy", "fix", "refactor"]
+      description: "리서치 → 코드 수정 → 배포 워크플로우. alpha 가 구현 방향 분석, epsilon 이 코드 수정 실행."
+
+team:
+  lead:
+    name: "team-lead"
+    role: "팀장 겸 리뷰어"
+    direct_edit_threshold: "20%"
+    skills:
+      - task-planner
+      - artifact-reviewer
+      - integrator
+      - fewer-permission-prompts
+
+  members:
+    - name: "member-alpha"
+      role: "시장 조사 및 데이터 분석 담당"
+      domain: "market research"
+      agent_md: ".claude/agents/member-alpha/AGENT.md"
+      skills:
+        - shared/file-io
+        - shared/data-parser
+      output:
+        directory: "member-alpha"
+        expected_files:
+          - name: "analysis-report.md"
+            format: "md"
+            required_sections:
+              - "개요"
+              - "분석 결과"
+              - "결론"
+
+    - name: "member-beta"
+      role: "최종 보고서 초안 작성 담당"
+      domain: "report writing"
+      agent_md: ".claude/agents/member-beta/AGENT.md"
+      skills:
+        - shared/file-io
+      output:
+        directory: "member-beta"
+        expected_files:
+          - name: "draft-report.md"
+            format: "md"
+            required_sections:
+              - "요약"
+              - "핵심 인사이트"
+              - "추천 사항"
+
+    - name: "member-gamma"
+      role: "팩트체커 (인용·수치·출처 검증)"
+      domain: "fact checking"
+      agent_md: ".claude/agents/member-gamma/AGENT.md"
+      skills:
+        - shared/file-io
+        - web-research   # WebSearch · WebFetch 사용
+      output:
+        directory: "member-gamma"
+        expected_files:
+          - name: "fact-check-log.md"
+            format: "md"
+            required_sections:
+              - "검증 요약"
+              - "항목별 검증 결과"
+              - "수정 권고"
+
+    - name: "member-delta"
+      role: "시각화 담당 (Mermaid/테이블/차트 스펙)"
+      domain: "visualization"
+      agent_md: ".claude/agents/member-delta/AGENT.md"
+      skills:
+        - shared/file-io
+      output:
+        directory: "member-delta"
+        expected_files:
+          - name: "visuals.md"
+            format: "md"
+            required_sections:
+              - "시각자료 개요"
+              - "Mermaid 다이어그램"
+              - "핵심 수치 테이블"
+
+termination:
+  max_cycles: 3
+  max_review_per_member: 2
+  quality_criteria:
+    - type: "rule"
+      description: "모든 Member 산출물의 필수 섹션 포함"
+    - type: "llm_self_check"
+      description: "통합 산출물의 논리적 정합성 및 중복/모순 없음"
+    - type: "schema"
+      description: "최종 산출물이 기대 형식을 준수"
+  human_approval: false
+
+execution:
+  dependency_strategy: "lead_decides"
+  data_passing: "file_based"
+  intermediate_output_dir: "output"
+  workspace:
+    enabled: true
+    root: "output"
+    active_pointer: "output/.active-workspace"
+    new_topic_trigger: "신규 주제"
+    slug_style: "kebab-case"
+
+# Phase 5: Distribution (배포) 단계가 사용할 외부 시스템 설정.
+# Phase 5 는 human_approval 통과 후 team-lead 가 실행.
+distribution:
+  # Slack Incoming Webhook
+  slack:
+    enabled: true
+    webhook_file: "C:\\Users\\jmlee\\.claude-secrets\\slack-webhook.txt"
+    # Payload 는 워크스페이스 내부에 저장 (WS/slack-notification.json).
+    # webhook curl + slack-bridge 봇이 공유. CLAUDE.md Phase 5-2 참조.
+    payload_path: "WS/slack-notification.json"
+    format: "block_kit"  # Block Kit 권장 (한글 UTF-8 이슈 회피 위해 --data-binary 사용)
+
+  # Notion 저장 위치 (리서치/분석 BOT DB)
+  notion:
+    enabled: true
+    database_url: "https://www.notion.so/barogohq/348363ae08db802cb0d6e5316d0eaabc"
+    data_source_id: "348363ae-08db-80aa-ba4a-000b3160d6ed"
+    title_property: "이름"
+    icon: "🖥️"
+
+  # Gmail / Drive / Calendar 는 실제 사용 시점에 인증 후 활성화
+  gmail:
+    enabled: false
+  google_drive:
+    enabled: false
+  google_calendar:
+    enabled: false

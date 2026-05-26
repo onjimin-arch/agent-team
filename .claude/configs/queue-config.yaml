@@ -3,7 +3,7 @@ slack:
   token_file: .secrets/slack-token
 
 opencode:
-  default_model: anthropic/claude-sonnet-4-5-20250929
+  default_model: nvidia/qwen/qwen3.5-397b-a17b
   workspace_root: ./output
 
 priority:
