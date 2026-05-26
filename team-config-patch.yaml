@@ -1,0 +1,53 @@
+# ── team-config-patch.yaml ──────────────────────────────
+# 생성: member-alpha (Team Lead 위임) | 2026-05-26
+# 적용 방법: team-config.yaml의 해당 섹션에 아래 내용을 추가
+#
+# ⚠️  이 파일은 기존 team-config.yaml을 대체하지 않는다.
+#     task.types 배열과 team.members 배열에 각각 병합(append)한다.
+
+# ────────────────────────────────────────────────────────
+# 1. task.types 섹션에 추가
+# ────────────────────────────────────────────────────────
+task:
+  types:
+    - name: "github-plan"
+      description: "GitHub 공개 코드 탐색 → 패턴 분석 → 구현 계획 수립"
+      default: false
+      members:
+        - member-eta
+        - member-alpha
+        - member-beta
+      triggers:
+        - "깃허브"
+        - "오픈소스 참고"
+        - "github"
+        - "공개 코드"
+        - "레퍼런스 찾아"
+        - "비슷한 구현"
+        - "코드 학습"
+
+# ────────────────────────────────────────────────────────
+# 2. team.members 섹션에 추가
+# ────────────────────────────────────────────────────────
+team:
+  members:
+    - name: "member-eta"
+      role: "GitHub 공개 레포 탐색·코드 패턴 분석·라이선스 감사 담당"
+      domain: "github research"
+      agent_md: ".claude/agents/member-eta/AGENT.md"
+      skills:
+        - github-researcher
+        - shared/file-io
+      output:
+        directory: "member-eta"
+        expected_files:
+          - name: "github-research-report.md"
+            format: "md"
+            required_sections:
+              - "탐색 조건"
+              - "탐색 결과 요약"
+              - "레포별 상세 분석"
+              - "크로스 레포 공통 패턴"
+              - "안티패턴"
+              - "Planner를 위한 권고 스택·접근법"
+              - "출처 목록"

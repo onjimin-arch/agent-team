@@ -1,0 +1,56 @@
+{
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "🖥️ Agent Team 리서치 완료",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*워크스페이스*\n테스트"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Task Type*\nresearch-report"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*날짜*\n2026-05-26"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*참여 멤버*\ngamma · alpha · delta · beta"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*주제*: Claude Code Agent Team 멀티에이전트 시스템 분석\n*결과*: research-report 파이프라인 정상 작동 확인 (4단계 완료, 전 멤버 APPROVE)"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Notion 페이지*: <https://www.notion.so/36c363ae08db810db0e9e764da1b3343|테스트 리서치 (2026-05-26)>"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "Agent Team v1.0 · 최초 실행"
+        }
+      ]
+    }
+  ]
+}

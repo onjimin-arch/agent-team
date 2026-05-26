@@ -1,0 +1,47 @@
+{
+  "text": "✅ [에이전트 팀] GPU 지원 프로그램 현황 및 활용 방안 완료",
+  "blocks": [
+    {
+      "type": "header",
+      "text": { "type": "plain_text", "text": "✅ 에이전트 팀 보고서 완료", "emoji": true }
+    },
+    {
+      "type": "section",
+      "fields": [
+        { "type": "mrkdwn", "text": "*주제*\nGPU 지원 프로그램 현황 및 활용 방안" },
+        { "type": "mrkdwn", "text": "*작성일*\n2026-05-12" },
+        { "type": "mrkdwn", "text": "*Task Type*\nresearch-report" },
+        { "type": "mrkdwn", "text": "*활성 멤버*\nalpha · gamma · delta · beta" },
+        { "type": "mrkdwn", "text": "*사이클*\n1 / 3 (재할당 없음)" },
+        { "type": "mrkdwn", "text": "*승인*\nhuman_approval=false (config 기준 자동 통과)" }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*핵심 결과*\n• 국내 정부·공공기관 5개, 국내 클라우드 4개, 글로벌 클라우드 5개 GPU 지원 프로그램 정리\n• AWS Activate 최대 $300k (가속기 포함), Google for Startups $200k 등 글로벌 크레딧 비교\n• 단계별 포트폴리오 전략: 무료 ZeroGPU → 클라우드 크레딧 → NIPA 바우처 → 전용 클러스터\n• H100 인스턴스는 A100 대비 크레딧 소진 2배 빠름 — 인스턴스 선택 시 주의 필요\n• AWS Activate + NIPA AI 바우처 병행 신청 가능 — 포트폴리오 최적화 권장"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*팩트체크 결과*\n18건 검토 / 통과 15건 / 경미한 주의 2건 (Oracle 테이블 누락, AWS 범위 표기) / 수정 반영 1건 (AWS Activate $100k~$300k로 수정) / 전체 판정: ✅ 배포 가능"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "<https://www.notion.so/35e363ae08db81fd98ffd11c8ee1a668|📄 Notion 페이지 열기> · 리서치/분석 BOT DB"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        { "type": "mrkdwn", "text": "로컬 경로: `output/gpu-지원/final/final-artifact.md` · 후속 지시 반영 (2026-05-12 21:09)" }
+      ]
+    }
+  ]
+}

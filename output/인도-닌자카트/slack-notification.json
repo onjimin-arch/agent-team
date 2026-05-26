@@ -1,0 +1,47 @@
+{
+  "text": "✅ [에이전트 팀] 인도 닌자카트 조사 완료",
+  "blocks": [
+    {
+      "type": "header",
+      "text": { "type": "plain_text", "text": "✅ 에이전트 팀 보고서 완료", "emoji": true }
+    },
+    {
+      "type": "section",
+      "fields": [
+        { "type": "mrkdwn", "text": "*주제*\n인도 닌자카트 조사" },
+        { "type": "mrkdwn", "text": "*작성일*\n2026-04-24" },
+        { "type": "mrkdwn", "text": "*Task Type*\nresearch-report" },
+        { "type": "mrkdwn", "text": "*활성 멤버*\nalpha · gamma · delta · beta" },
+        { "type": "mrkdwn", "text": "*사이클*\n1 / 3 (재할당 없음, 전원 1사이클 완료)" },
+        { "type": "mrkdwn", "text": "*승인*\nhuman_approval=false (자동 완료)" }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*핵심 결과*\n• 닌자카트는 2015년 창업, 인도 최대 B2B 신선 농산물 공급망 플랫폼 (25개+ 도시, 농가 15만+, 소매상 9만+)\n• Walmart 전략적 투자(~$30M) 포함 누적 $350M+ 조달 — Flipkart 생태계 연계로 퀵커머스 확장 가능성\n• 5~7단계 중간상을 2~3단계로 단축, 폐기율 30~40% → 20% 이하로 개선 (추정)\n• 농가 거래 데이터 기반 핀테크(신용평가·BNPL)가 차세대 수익 엔진으로 부상\n• Tata·Reliance 대기업 진입으로 경쟁 심화, Walmart 파트너십이 핵심 방어막"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*팩트체크 결과*\n검증 18건 · 확인됨 11건 · 부분 일치 4건 · 출처 불명 3건 · 불일치 0건\n주요 수정: Walmart 지분 비율 비공개 처리, 일 처리 물량 출처 완화, 시장 규모 추정치 표현 완화"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "<https://www.notion.so/34c363ae08db816db1c7da728d9f2f79|📄 Notion 페이지 열기> · 리서치/분석 BOT"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        { "type": "mrkdwn", "text": "로컬 경로: `output/인도-닌자카트/final/final-artifact.md` · Phase 5 수동 복구" }
+      ]
+    }
+  ]
+}

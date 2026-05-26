@@ -1,0 +1,45 @@
+# ── team-config-auto-patch.yaml ──────────────────────────────
+# 적용: team-config.yaml의 해당 섹션에 병합
+# 주의: 이 파일은 diff 패치가 아닌 추가 설정 명세임.
+#       실제 team-config.yaml에 수동 병합할 것.
+
+# 1. execution 섹션에 auto_mode 서브섹션 추가
+execution:
+  dependency_strategy: "lead_decides"
+  data_passing: "file_based"
+  intermediate_output_dir: "output"
+  auto_mode:
+    enabled: true
+    trigger_prefix: "[AUTO:"           # Slack 메시지 감지 패턴
+    interrupt_policy: "none"           # 모든 인터럽트 자동 처리
+    escalation_channel: "slack"
+    escalation_endpoint: "http://localhost:5000/report"
+    review_direct_edit_threshold: 30   # AUTO 모드 직접수정 기준 (%)
+    auto_log_file: "auto-log.md"       # WS 내 판단 기록 파일
+
+# 2. task.types 중 dev 항목에 deployment 서브섹션 추가
+#    기존 dev type 하위에 아래 블록을 병합한다.
+dev_deployment_config:  # 이 키는 병합 시 제거하고 dev type 하위에 삽입
+  deployment:
+    enabled: true
+    skill: "deploy-heal"
+    max_attempts: 3
+    staging_port_offset: 1000          # STAGING_PORT = PROD_PORT + 1000
+    health_check_timeout_sec: 30
+    health_check_retries: 3
+    health_check_interval_sec: 10
+    rollback_on_failure: true
+    commit_on_success: true
+
+# 3. 환경변수 섹션 추가 (team-config.yaml 최상위에 추가)
+environment:
+  SLACK_BOT_TOKEN: "${SLACK_BOT_TOKEN}"
+  SLACK_REPORT_CHANNEL: "${SLACK_REPORT_CHANNEL:-#agent-log}"
+  PROD_PORT: "${PROD_PORT:-8000}"
+
+# 4. termination 수정 (기존 항목에 auto_proceed_on_escalation 추가)
+termination:
+  max_cycles: 3
+  max_review_per_member: 2
+  human_approval: false
+  auto_proceed_on_escalation: true    # 에스컬레이션 시 대기 없이 진행

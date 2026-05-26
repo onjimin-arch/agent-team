@@ -1,0 +1,72 @@
+{
+  "text": "✅ [에이전트 팀] 전남·광주 지역 기반 AI·로보틱스·물류 파트너사 조사 완료",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "✅ 에이전트 팀 보고서 완료",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*주제*\n전남·광주 지역 기반 AI·로보틱스·물류 파트너사 조사"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*작성일*\n2026-04-30"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Task Type*\nresearch-report"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*활성 멤버*\nalpha · gamma · delta · beta"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*사이클*\n1 / 3 (재할당 없음)"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*승인*\nhuman_approval=false (자동 완료)"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*핵심 결과*\n• AI 국가산업단지를 중심으로 한 광주 AI 클러스터의 구심력\n• 유진로봇의 상징성과 로보틱스 생태계 성숙도\n• 광양만권 물류 인프라와 GFEZ의 제도적 이점\n• 4개 지역 허브의 역할 분담과 시너지 가능성\n• 팩트체크 결과가 시사하는 정보 신뢰도 관리 필요성"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*팩트체크 결과*\n검증 16건 · 확인됨 6건 · 부분 일치 5건 · 출처 불명 3건 · 갱신 필요 2건"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "<https://app.notion.com/p/352363ae08db81bf8101e812272e569e|📄 Notion 페이지 열기> · 리서치/분석 BOT"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "로컬 경로: `output/전남-광주-지역-기반의-ai/final/final-artifact.md` · Phase 5 수동 보강 (Notion + Slack)"
+        }
+      ]
+    }
+  ]
+}

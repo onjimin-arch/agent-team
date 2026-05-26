@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# 환경 변수 / 시크릿
+.env
+.env.*
+*.env
+!*.env.example
+
+# 로그
+logs/
+*.log
+
+# slack-bridge 민감 파일
+slack-bridge/-B-*.env
+slack-bridge/-B-*.py
+slack-bridge/state/
+
+# slack-bot
+slack-bot/.env
+slack-bot/.env.save
+slack-bot/__pycache__/
+slack-bot/logs/
+slack-bot/.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
