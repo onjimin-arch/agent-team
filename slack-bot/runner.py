@@ -13,6 +13,9 @@ from pathlib import Path
 
 AGENT_DIR = str(Path(__file__).parent.parent)
 TIMEOUT = int(os.environ.get("AGENT_TIMEOUT", "600"))
+MODEL = os.environ.get("AGENT_MODEL", "anthropic/claude-sonnet-4-6")
+if "/" not in MODEL:
+    MODEL = f"anthropic/{MODEL}"
 
 
 def run_agent_task(task: str) -> str:
@@ -23,7 +26,7 @@ def run_agent_task(task: str) -> str:
 
     try:
         proc = subprocess.run(
-            ["claude", "--print", "--dangerously-skip-permissions", prompt],
+            ["opencode", "run", "--dangerously-skip-permissions", "--model", MODEL, prompt],
             cwd=AGENT_DIR,
             capture_output=True,
             text=True,
