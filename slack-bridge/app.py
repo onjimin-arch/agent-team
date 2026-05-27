@@ -72,6 +72,21 @@ _SLUG_LINE_RE = re.compile(r"^\s*슬러그\s*[:：]\s*([a-z0-9][a-z0-9\-]*)\s*$"
 _BARE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,64}$")
 _CANCEL_WAIT_TIMEOUT = 45.0  # 중단 신호 후 스레드 join 대기 최대 초
 
+_COMMAND_KEYWORDS = [
+    "리서치", "분석", "보고서", "시장", "정책", "현황", "조사", "research", "report",
+    "코드 리뷰", "code review", "리뷰해", "pr",
+    "영문", "번역", "다국어", "english", "translate", "브리프",
+    "개발", "배포", "버그", "기능 추가", "implement", "deploy", "fix", "refactor",
+    "깃허브", "github", "오픈소스", "공개 코드", "레퍼런스",
+    "설계", "아키텍처", "design", "spec", "blueprint",
+    "만들어", "작성해", "해줘", "해 줘", "만들자", "짜줘",
+]
+
+
+def _is_command(text: str) -> bool:
+    t = text.lower()
+    return any(k in t for k in _COMMAND_KEYWORDS)
+
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 
 
@@ -203,10 +218,16 @@ def _cancel_and_wait(task_id: str, client, channel: str, thread_ts: str | None, 
 def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, user: str, client) -> None:
     say_kwargs = {"thread_ts": thread_ts} if thread_ts else {}
 
-    if NEW_TOPIC_TRIGGER in text:
+    has_trigger = NEW_TOPIC_TRIGGER in text
+    if has_trigger:
         task_desc = text.replace(NEW_TOPIC_TRIGGER, "", 1).strip(" -:·")
     else:
         task_desc = text
+
+    # 업무 키워드가 없는 일반 대화는 작업 시작하지 않음
+    if not has_trigger and not _is_command(task_desc):
+        say("안녕하세요! 업무 요청을 입력해 주세요.\n예) `2026년 배달 시장 분석해줘`", **say_kwargs)
+        return
 
     if not task_desc:
         say("업무 내용을 입력해 주세요. 예) `바로고 배달 시장 분석해줘`", **say_kwargs)
