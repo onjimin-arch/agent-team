@@ -77,7 +77,7 @@ AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 자동 승인. 즉시 Phase 5 진입.
 
 **⑦ 에스컬레이션 (파일 없음, 감지 실패 등)**
-`POST http://localhost:5000/report` 로 Slack에 에러 보고.
+에러 내용을 stdout으로 출력 (slack-bridge가 Slack 스레드에 자동 중계).
 대기하지 않고 현재 최선 버전으로 계속 진행.
 `auto-log.md`에 에스컬레이션 사유와 대응 기록.
 
@@ -133,9 +133,47 @@ AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 - `research-report` (default): alpha · gamma · delta · beta
 - `code-review`: alpha · gamma · beta
 - `multilingual-brief`: alpha · beta · delta
-- `dev`: alpha · epsilon
+- `dev`: eta · alpha · epsilon
 - `design`: alpha · zeta
 - `github-plan`: eta · alpha · beta
+
+### github-plan 타입의 특별 처리 규칙
+**매우 중요**: `github-plan` 타입이 감지되면 **반드시** 다음 선행 단계를 거쳐야 합니다:
+
+1. **Member-eta**(GitHub Researcher) 선행 실행
+   - GitHub에서 관련 오픈소스 레포지토리 5 개 이상 검색
+   - 각 레포의 라이선스 (MIT/Apache/GPL/BSL 등) 감사
+   - 주요 기능과 아키텍처 분석
+   - 표절 위험이 있는 코드 스니펫 식별
+
+2. **Member-alpha** (분석) - 2 차 분석
+   - Eta 의 보고서를 바탕으로 구현 방향성 분석
+   - 어떤 기능을 참조하고 어떤 기능을 독창적으로 구현할지 제안
+   - 라이선스 리스크가 있는 경우 대안 제시
+
+3. **Member-beta** (보고서) - 최종 계획서
+   - 앞선 분석을 종합하여 구현 로드맵 작성
+   - 어떤 오픈소스를 얼마나 참조할지 명문화
+
+위 단계를 거치지 않은 `github-plan` 타입 작업은 **규약 위반**입니다.
+
+### dev 타입의 특별 처리 규칙
+**매우 중요**: `dev` 타입이 감지되면 **반드시** 다음 선행 단계를 거쳐야 합니다:
+
+1. **Member-eta** (GitHub Researcher) 선행 실행
+   - 구현 목표와 관련된 오픈소스 레포지토리 5개 이상 탐색
+   - 라이선스 감사 (MIT/Apache/GPL/BSL 등)
+   - 참조 가능한 코드 패턴 및 안티패턴 식별
+
+2. **Member-alpha** (구현 방향 분석)
+   - Eta 보고서를 바탕으로 구현 전략 수립
+   - 참조할 코드와 독자 구현할 부분 구분
+
+3. **Member-epsilon** (코드 수정·검증·배포)
+   - Alpha 분석 결과 기반으로 실제 코드 수정 실행
+   - 자체 검증 후 배포
+
+위 단계를 거치지 않은 `dev` 타입 작업은 **규약 위반**입니다.
 
 ### 1-1. Task 분해
 1. Analyze the user task description.

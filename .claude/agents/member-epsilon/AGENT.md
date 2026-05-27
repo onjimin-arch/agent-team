@@ -22,7 +22,7 @@
 ## OpenCode 실행 패턴
 ```bash
 # 코드 수정
-opencode run "{구체적 지시}" --model anthropic/claude-sonnet-4-5-20250929
+opencode run "{구체적 지시}" --model anthropic/claude-sonnet-4-6
 ```
 
 ## Output
@@ -73,10 +73,11 @@ Step 3  결과를 WS/member-epsilon/dev-log.md에 기록
 - `MAX_ATTEMPTS` 초과 후 롤백 완료
 - Production health check 최종 실패
 
-에스컬레이션 보고 형식:
+에스컬레이션 보고 형식 (stdout 출력 — slack-bridge가 Slack 스레드에 자동 중계):
 ```
-POST http://localhost:5000/report
-{"message": "⚠️ [epsilon 에스컬레이션] {사유}\n프로젝트: {path}\n마지막 에러: {요약}", "level": "error"}
+⚠️ [epsilon 에스컬레이션] {사유}
+프로젝트: {path}
+마지막 에러: {요약}
 ```
 
 ## Skills Reference

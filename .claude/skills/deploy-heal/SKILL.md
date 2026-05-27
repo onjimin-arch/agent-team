@@ -33,7 +33,7 @@ function Get-ServiceType {
 
 감지 순서: flutter → android → docker → nextjs → nodejs → python-web → python-script → unknown
 
-unknown 반환 시: `POST http://localhost:5000/report` 로 Slack에 에러 보고 후 Team Lead에 에스컬레이션.
+unknown 반환 시: 에러 내용을 stdout으로 출력(slack-bridge가 자동 중계) 후 Team Lead에 에스컬레이션.
 
 ---
 
@@ -63,11 +63,8 @@ function Test-Health {
 
 function Send-SlackReport {
     param([string]$Message, [string]$Level = "info")
-    $body = @{ message = $Message; level = $Level } | ConvertTo-Json
-    try {
-        Invoke-RestMethod -Uri "http://localhost:5000/report" `
-          -Method POST -ContentType "application/json" -Body $body
-    } catch { Write-Host "[deploy-heal] Slack 보고 실패: $_" }
+    # stdout 출력 — slack-bridge agent_runner 가 읽어 Slack 스레드에 중계
+    Write-Host "[$Level] $Message"
 }
 ```
 
