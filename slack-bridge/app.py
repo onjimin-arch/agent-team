@@ -45,7 +45,9 @@ from state import (
 
 load_dotenv(Path(__file__).parent / ".env")
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.getLogger("slack_bolt").setLevel(logging.WARNING)
+logging.getLogger("slack_sdk").setLevel(logging.WARNING)
 log = logging.getLogger("slack-bridge")
 
 _allowed_raw = (
