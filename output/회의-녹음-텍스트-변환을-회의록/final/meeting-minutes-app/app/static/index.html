@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>회의록 자동 작성</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>📝 회의록 자동 작성</h1>
+    <p class="subtitle">회의를 녹음하거나 오디오 파일을 업로드하면 AI가 회의록을 작성합니다</p>
+
+    <!-- Input Card -->
+    <div class="card" id="input-section">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="record">🎙 녹음하기</button>
+        <button class="tab-btn" data-tab="upload">📁 파일 업로드</button>
+      </div>
+
+      <!-- Record Tab -->
+      <div class="tab-panel active" id="tab-record">
+        <button id="record-btn">
+          <span class="record-dot"></span>
+          <span id="record-label">녹음 시작</span>
+        </button>
+        <div id="timer">00:00</div>
+      </div>
+
+      <!-- Upload Tab -->
+      <div class="tab-panel" id="tab-upload">
+        <div class="drop-zone" id="drop-zone">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 19V6l12-3v13M9 19c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm12-3c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"/>
+          </svg>
+          <p><strong>클릭</strong>하거나 파일을 드래그하세요</p>
+          <p>mp3, wav, m4a, ogg, flac, webm (최대 50MB)</p>
+          <div id="file-name"></div>
+          <input type="file" id="file-input" accept="audio/*" />
+        </div>
+      </div>
+
+      <button id="submit-btn" disabled>회의록 생성</button>
+      <div id="error-msg"></div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card" id="progress-section">
+      <h2>처리 중...</h2>
+      <div class="steps">
+        <div class="step" id="step-upload">
+          <span class="step-icon">📤</span>
+          <span>오디오 업로드</span>
+          <span class="spinner" style="margin-left:auto; display:none"></span>
+        </div>
+        <div class="step" id="step-stt">
+          <span class="step-icon">🎙</span>
+          <span>음성 텍스트 변환 (Whisper)</span>
+          <span class="spinner" style="margin-left:auto; display:none"></span>
+        </div>
+        <div class="step" id="step-minutes">
+          <span class="step-icon">✍️</span>
+          <span>회의록 생성 (Claude AI)</span>
+          <span class="spinner" style="margin-left:auto; display:none"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="card" id="result-section">
+      <div class="collapsible-header" id="transcript-toggle">
+        <h3>📄 전사 텍스트</h3>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="collapsible-body" id="transcript-body">
+        <pre id="transcript-text"></pre>
+      </div>
+
+      <hr style="margin: 20px 0; border-top: 2px solid #e2e8f0" />
+
+      <h3 style="margin-bottom:12px">📋 회의록</h3>
+      <div class="minutes-output" id="minutes-output"></div>
+
+      <button id="download-btn">⬇ Markdown 다운로드</button>
+      <button id="reset-btn">새 회의록 작성</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

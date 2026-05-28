@@ -1,0 +1,65 @@
+{
+  "text": "✅ [에이전트 팀] 회의 녹음 텍스트 변환을 통한 회의록 작성 앱 개발 완료",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "✅ 에이전트 팀 보고서 완료",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*주제*\n회의 녹음 텍스트 변환을 통한 회의록 작성 앱 개발"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*작성일*\n2026-05-27"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Task Type*\ndev"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*활성 멤버*\nalpha · epsilon"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*사이클*\n1 / 3 (재할당 없음)"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*승인*\nhuman_approval=false (자동 완료)"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*구현 결과*\n• FastAPI + Whisper(base) + Claude claude-sonnet-4-6 기반 회의록 앱 구현\n• 브라우저 마이크 녹음 및 오디오 파일 업로드 지원\n• 한국어 STT → 구조화 회의록 자동 생성 (요약/결정사항/액션아이템)\n• Markdown 다운로드 기능 포함\n• 총 12개 파일 신규 생성 (~500줄)"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "<https://www.notion.so/36c363ae08db817784a1f6802e67d76f|📄 Notion 페이지 열기> · 리서치/분석 BOT"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "로컬 경로: `output/회의-녹음-텍스트-변환을-회의록/final/final-artifact.md` · 후속 지시 반영 (2026-05-27 02:57)"
+        }
+      ]
+    }
+  ]
+}

@@ -117,6 +117,7 @@ def _run_subprocess(
 
     if follow_up:
         prompt = (
+            f"[AUTO: {topic_slug}]\n\n"
             f"{hint}\n\n"
             f"기존 워크스페이스에 후속 지시가 접수되었습니다.\n\n"
             f"**워크스페이스 슬러그**: `{topic_slug}`\n"
@@ -126,6 +127,7 @@ def _run_subprocess(
         )
     else:
         prompt = (
+            f"[AUTO: {topic_slug}]\n새 작업\n\n"
             f"{hint}\n\n"
             f"업무 요청이 접수되었습니다.\n\n"
             f"**업무 설명**: {task_description}\n"

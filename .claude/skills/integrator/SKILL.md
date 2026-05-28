@@ -7,7 +7,7 @@ Help the Team Lead merge approved member artifacts into a final deliverable.
 - Phase 4: INTEGRATE
 
 ## Outputs
-- A final artifact saved under `/output/final/`
+- A final artifact saved under `output/{slug}/final/`
 - Integration quality checks
 
 ## Validation

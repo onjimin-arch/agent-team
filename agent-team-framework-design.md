@@ -1,7 +1,7 @@
 # Agent Team Framework 설계서
 
 > **Claude Code 구현 참조용 통합 설계 문서**
-> 작성일: 2026-04-17 | 버전: v1.1 (2026-05-24: dev task type · member-epsilon · Priority Queue 추가)
+> 작성일: 2026-04-17 | 버전: v1.3 (2026-05-28: Phase 5 배포 추가, slack-bridge 아키텍처, member-zeta/eta/reviewer, github-plan/design 태스크 유형, Priority Queue 제거)
 
 ---
 
@@ -80,15 +80,16 @@
 ### 2.1 전체 실행 흐름
 
 ```
-[시작] 사용자가 Task 입력
-  │
+[시작] 사용자가 Task 입력 (Slack 또는 CLI)
+  │   ※ [AUTO: slug] 접두사 → 중단 없이 Phase 1~5 자동 실행
   ▼
 ┌─────────────────────────────────────────────┐
 │ Phase 1: PLAN (Team Lead)                   │
-│  1-1. Config 로드 → 팀 구성 확인            │
+│  1-1. Config 로드 → 태스크 유형 자동 판별    │
 │  1-2. Task 분석 → Assignment 목록 생성       │
 │  1-3. 의존성 분석 → 실행 순서 결정           │
-│  1-4. 실행 계획서 작성 → /output/plan.md     │
+│  1-4. 워크스페이스 생성 → output/{slug}/     │
+│  1-5. 실행 계획서 작성 → plan.md             │
 └──────────────────┬──────────────────────────┘
                    │
                    ▼
@@ -96,7 +97,7 @@
 │ Phase 2: EXECUTE (Team Lead → Members)      │
 │  반복: 각 Assignment에 대해                  │
 │  2-1. Team Lead가 Member 호출 + 지시 전달    │
-│  2-2. Member가 산출물 생성 → /output/        │
+│  2-2. Member가 산출물 생성 → output/{slug}/  │
 │  2-3. (선행 산출물 참조 필요 시) 경로 전달    │
 └──────────────────┬──────────────────────────┘
                    │
@@ -120,12 +121,20 @@
 │  4-3. 종료 조건 체크                         │
 │       ├─ 품질 기준 충족 + 반복 제한 이내     │
 │       │   ├─ 사람 승인 필요 → 대기            │
-│       │   └─ 불필요 → 완료                    │
+│       │   └─ 불필요 → Phase 5로              │
 │       └─ 미충족 → Phase 2로 (전체 재실행)    │
 └──────────────────┬──────────────────────────┘
                    │
                    ▼
-[종료] 최종 산출물 → /output/final/
+┌─────────────────────────────────────────────┐
+│ Phase 5: DISTRIBUTE (Team Lead)             │
+│  5-1. Slack 결과 링크 전송                   │
+│  5-2. Notion 저장 (리서치/분석 DB)           │
+│  5-3. (선택) Gmail · Google Drive 배포       │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+[종료] 최종 산출물 → output/{slug}/final/
 ```
 
 ### 2.2 Phase별 상세 정의
@@ -204,10 +213,24 @@ ELSE → 해당 Member에 수정 지시서와 함께 재지시
 | **입력** | 모든 Member의 승인된 산출물 + plan.md |
 | **LLM 판단 영역** | 산출물 간 정합성 확인, 중복/모순 해소, 통합 구조 결정, 전체 품질 자기 검증 |
 | **코드/스크립트 처리** | 파일 병합, 포맷 변환 → 통합 스킬 스크립트 |
-| **산출물** | `/output/final/{final-artifact}` — 최종 통합 결과물 |
+| **산출물** | `output/{slug}/final/{final-artifact}` — 최종 통합 결과물 |
 | **성공 기준** | config에 정의된 최종 품질 기준 충족 |
 | **검증 방법** | LLM 자기 검증 (통합 품질 체크리스트) + 스키마 검증 (최종 산출물 형식) |
 | **실패 시 처리** | 품질 미충족 + 반복 가능 → Phase 2로 전체 재실행. 최대 반복 도달 → 현재 최선 버전 + 품질 보고서 함께 출력 |
+
+#### Phase 5: DISTRIBUTE
+
+> Team Lead가 최종 산출물을 외부 채널(Slack, Notion 등)로 배포하는 단계.
+
+| 항목 | 내용 |
+|------|------|
+| **수행 주체** | Team Lead |
+| **입력** | `output/{slug}/final/` 산출물 + distribution 설정 |
+| **Slack** | 결과물 링크 + 요약을 `SLACK_REPORT_CHANNEL`로 전송 |
+| **Notion** | 최종 보고서를 리서치/분석 DB 페이지로 저장 |
+| **Gmail · Drive · Calendar** | `enabled: false` (기본값), 필요 시 인증 후 활성화 |
+| **성공 기준** | 활성화된 채널에 배포 완료 |
+| **실패 시 처리** | 배포 실패 시 Slack 에러 알림 + 로컬 산출물 유지 (재시도 가능) |
 
 ### 2.3 종료 조건 상세
 
@@ -275,6 +298,12 @@ ELSE → 해당 Member에 수정 지시서와 함께 재지시
               충족 │
                  ▼
           ┌──────────────┐
+          │  Phase 5     │
+          │  DISTRIBUTE  │──── 배포 실패 ──→ [에러 알림 + 재시도]
+          └──────┬───────┘
+                 │ 완료
+                 ▼
+          ┌──────────────┐
           │  COMPLETE    │
           └──────────────┘
 ```
@@ -288,51 +317,53 @@ ELSE → 해당 Member에 수정 지시서와 함께 재지시
 ### 3.1 폴더 구조
 
 ```
-/project-root
-├── CLAUDE.md                              # 메인 에이전트 (Team Lead) 지침
-├── queue_server.py                        # Priority Queue 서버 (Flask + heapq)
+/agent-team
+├── CLAUDE.md                              # 팀장 운영 프로토콜 (Phase 1~5, AUTO 모드, 종료 조건)
+├── README.md                              # 프로젝트 사용 가이드 (한국어)
+├── agent-team-framework-design.md         # 본 설계서 (설계 철학 + ADR)
+├── install-service.ps1                    # 회사 PC 작업 스케줄러 등록 스크립트
 ├── /.claude
 │   ├── /configs
-│   │   ├── team-config.yaml               # 팀 구성 정의 (config-driven)
-│   │   └── queue-config.yaml              # Priority Queue 설정 (Slack 포트, 모델, 우선순위)
+│   │   └── team-config.yaml               # 팀 구성·태스크 유형·배포 설정 (config-driven)
 │   ├── /skills
 │   │   ├── /task-planner
-│   │   │   ├── SKILL.md                   # Task 분해 + 의존성 분석 스킬
-│   │   │   └── /scripts
-│   │   │       └── validate-plan.py       # plan.md 구조 검증 (DAG, Assignment 수)
+│   │   │   └── SKILL.md                   # Task 분해 + 의존성 분석
 │   │   ├── /artifact-reviewer
-│   │   │   ├── SKILL.md                   # 산출물 품질 검토 스킬
-│   │   │   └── /scripts
-│   │   │       └── check-artifact.py      # 산출물 형식/필수항목 검증
+│   │   │   └── SKILL.md                   # 산출물 품질 검토
 │   │   ├── /integrator
-│   │   │   ├── SKILL.md                   # 산출물 통합 스킬
-│   │   │   └── /scripts
-│   │   │       └── merge-artifacts.py     # 파일 병합 유틸리티
-│   │   └── /shared                        # 모든 에이전트가 공유하는 스킬
-│   │       ├── /file-io
-│   │       │   ├── SKILL.md
-│   │       │   └── /scripts
-│   │       │       ├── read-file.py
-│   │       │       └── write-file.py
-│   │       └── /data-parser
-│   │           ├── SKILL.md
-│   │           └── /scripts
-│   │               └── parse-data.py
+│   │   │   └── SKILL.md                   # 산출물 통합
+│   │   ├── /deploy-heal
+│   │   │   └── SKILL.md                   # 배포 + 헬스체크 + 롤백 (epsilon 전용)
+│   │   ├── /github-researcher
+│   │   │   └── SKILL.md                   # GitHub 공개 레포 탐색 + 라이선스 감사 (eta 전용)
+│   │   ├── /fewer-permission-prompts
+│   │   │   └── SKILL.md                   # 권한 프롬프트 최소화 (팀장 전용)
+│   │   └── /shared
+│   │       ├── /file-io/SKILL.md
+│   │       ├── /data-parser/SKILL.md
+│   │       └── /web-research/SKILL.md     # WebSearch + WebFetch (gamma 전용)
 │   └── /agents
-│       ├── /member-template
-│       │   └── AGENT.md                   # Member 에이전트 기본 템플릿
-│       ├── /member-alpha … /member-delta  # 각 Member AGENT.md
-│       └── /member-epsilon
-│           └── AGENT.md                   # Dev Agent (OpenCode headless 실행 전담)
-├── /output
-│   ├── .active-workspace                  # 현재 활성 워크스페이스 슬러그
-│   └── /{topic-slug}/                     # 주제별 워크스페이스
-│       ├── plan.md                        # Phase 1 산출물
-│       ├── review-log.md                  # Phase 3 산출물
-│       ├── slack-notification.json        # Phase 5 Slack Block Kit 페이로드
-│       ├── /{member-name}/                # 각 Member의 개별 산출물
-│       └── /final/                        # Phase 4 최종 통합 산출물
-└── agent-team-framework-design.md         # 본 설계서 (참고용)
+│       ├── /member-alpha/AGENT.md         # 시장 조사·데이터 분석
+│       ├── /member-beta/AGENT.md          # 최종 보고서 초안 작성
+│       ├── /member-gamma/AGENT.md         # 팩트체커 (WebSearch/WebFetch)
+│       ├── /member-delta/AGENT.md         # 시각화 (Mermaid·테이블)
+│       ├── /member-epsilon/AGENT.md       # 개발 태스크 실행 (코드 수정·배포)
+│       ├── /member-zeta/AGENT.md          # 에이전트 설계서 작성
+│       ├── /member-eta/AGENT.md           # GitHub 레포 탐색·라이선스 감사
+│       └── /member-reviewer/AGENT.md      # 산출물 품질 검토 보조
+├── /slack-bridge                          # Slack ↔ 팀장 연결 봇
+│   ├── app.py                             # 이지민 PC용 (Socket Mode)
+│   ├── app-B-jmlee-N2.py                  # 회사 PC용 (동일 로직, webhook 경로만 다름)
+│   ├── agent_runner.py                    # opencode run 서브프로세스 실행기
+│   ├── state.py                           # 작업 상태·스레드 매핑 (파일 기반)
+│   └── requirements.txt
+└── /output
+    ├── .active-workspace                  # 현재 활성 워크스페이스 슬러그
+    └── /{topic-slug}/                     # 주제별 워크스페이스
+        ├── plan.md                        # Phase 1 산출물
+        ├── review-log.md                  # Phase 3 산출물
+        ├── /{member-name}/                # 각 Member의 개별 산출물
+        └── /final/                        # Phase 4 최종 통합 산출물
 ```
 
 ### 3.2 팀 구성 Config 스키마
@@ -340,73 +371,93 @@ ELSE → 해당 Member에 수정 지시서와 함께 재지시
 > Config는 업무가 바뀔 때 교체하는 유일한 파일이다. 팀 구성, 종료 조건, 산출물 형식을 모두 여기서 정의한다.
 
 ```yaml
-# team-config.yaml
+# team-config.yaml (핵심 섹션 발췌)
 
 task:
   name: "업무명"
   description: "업무에 대한 상세 설명"
   input_description: "입력 데이터/지시 형태"
   final_output:
-    format: "md | docx | xlsx | json"        # 최종 산출물 형식
+    format: "md | docx | xlsx | json"
     description: "최종 산출물에 대한 설명"
+
+  # 팀장이 사용자 요청 문장에서 자동 판별할 태스크 유형 (트리거 키워드 매칭)
+  types:
+    - name: "research-report"
+      default: true                            # 매칭 없으면 이 유형으로 처리
+      members: ["member-alpha", "member-gamma", "member-delta", "member-beta"]
+      triggers: ["리서치", "분석", "보고서", "시장"]
+    - name: "dev"
+      members: ["member-eta", "member-alpha", "member-epsilon"]  # eta 선행 필수
+      triggers: ["개발", "코드", "버그", "fix", "deploy"]
+      deployment:
+        enabled: true
+        skill: "deploy-heal"
+        rollback_on_failure: true
+    - name: "github-plan"
+      members: ["member-eta", "member-alpha", "member-beta"]
+      triggers: ["깃허브", "오픈소스 참고", "github"]
+    # … 나머지 유형은 team-config.yaml 참조
 
 team:
   lead:
     name: "team-lead"
-    role: "팀장의 역할 한 줄 요약"
+    role: "팀장 겸 리뷰어"
     direct_edit_threshold: "20%"               # 직접 수정 허용 기준 (산출물 영향 범위)
-    skills:                                    # Team Lead 전용 스킬
+    skills:
       - task-planner
       - artifact-reviewer
       - integrator
+      - fewer-permission-prompts
 
   members:
     - name: "member-alpha"
-      role: "이 Member의 역할 한 줄 요약"
-      domain: "담당 도메인/영역"
+      role: "시장 조사·데이터 분석"
       agent_md: ".claude/agents/member-alpha/AGENT.md"
-      skills:                                  # 이 Member가 사용하는 스킬
-        - shared/file-io
-        - shared/data-parser
+      skills: [shared/file-io, shared/data-parser]
       output:
-        directory: "output/member-alpha"
+        directory: "member-alpha"
         expected_files:
           - name: "analysis-report.md"
-            format: "md"
-            required_sections:                 # 검증용 필수 섹션
-              - "개요"
-              - "분석 결과"
-              - "결론"
-
-    - name: "member-beta"
-      role: "이 Member의 역할 한 줄 요약"
-      domain: "담당 도메인/영역"
-      agent_md: ".claude/agents/member-beta/AGENT.md"
-      skills:
-        - shared/file-io
-      output:
-        directory: "output/member-beta"
-        expected_files:
-          - name: "data-summary.json"
-            format: "json"
-            schema_file: "schemas/data-summary.schema.json"  # (선택) JSON 스키마
+            required_sections: ["개요", "분석 결과", "결론"]
+    # … 나머지 멤버는 team-config.yaml 참조
 
 termination:
-  max_cycles: 3                                # Phase 2-4 전체 루프 최대 횟수
-  max_review_per_member: 2                     # 개별 Member 재지시 최대 횟수
-  quality_criteria:                            # 품질 기준 (모두 충족 시 통과)
+  max_cycles: 3
+  max_review_per_member: 2
+  quality_criteria:
     - type: "rule"
       description: "모든 Member 산출물의 필수 섹션 포함"
     - type: "llm_self_check"
       description: "통합 산출물의 논리적 정합성 및 중복/모순 없음"
     - type: "schema"
       description: "최종 산출물이 기대 형식을 준수"
-  human_approval: true                         # true면 최종 산출물에 사람 승인 필요
+  human_approval: false
+  auto_proceed_on_escalation: true
 
 execution:
-  dependency_strategy: "lead_decides"          # lead_decides | all_parallel | all_sequential
-  data_passing: "file_based"                   # file_based | inline
+  dependency_strategy: "lead_decides"
+  data_passing: "file_based"
   intermediate_output_dir: "output"
+  workspace:
+    enabled: true
+    root: "output"
+    active_pointer: "output/.active-workspace"
+    new_topic_trigger: "새 작업"               # 새 워크스페이스 생성 트리거 키워드
+    slug_style: "kebab-case"
+  auto_mode:
+    enabled: true
+    trigger_prefix: "[AUTO:"                   # [AUTO: slug] 접두사로 자동 실행
+    interrupt_policy: "none"                   # 자동 모드 중 사용자 중단 없음
+    escalation_channel: "slack"
+
+distribution:
+  slack:
+    enabled: true
+    channel: "${SLACK_REPORT_CHANNEL:-#agent-log}"
+  notion:
+    enabled: true
+    database_url: "https://www.notion.so/..."
 ```
 
 ### 3.3 에이전트 구조
@@ -415,8 +466,15 @@ execution:
 
 | 에이전트 | 유형 | 역할 | 소속 Phase |
 |----------|------|------|-----------|
-| **Team Lead** | 메인 (CLAUDE.md) | 계획·분배·검토·통합·종료 판단 | 전 Phase |
-| **Member (동적)** | 서브에이전트 (AGENT.md) | 할당된 영역의 산출물 생성 | Phase 2 |
+| **Team Lead** | 메인 (CLAUDE.md) | 계획·분배·검토·통합·배포·종료 판단 | 전 Phase |
+| **member-alpha** | 서브에이전트 | 시장 조사·데이터 분석 | Phase 2 |
+| **member-beta** | 서브에이전트 | 최종 보고서 초안 작성 | Phase 2 |
+| **member-gamma** | 서브에이전트 | 팩트체커 (WebSearch/WebFetch) | Phase 2 |
+| **member-delta** | 서브에이전트 | 시각화 (Mermaid·테이블) | Phase 2 |
+| **member-epsilon** | 서브에이전트 | 개발 실행 (코드 수정·배포, deploy-heal 스킬) | Phase 2 |
+| **member-zeta** | 서브에이전트 | 에이전트 설계서 작성 | Phase 2 |
+| **member-eta** | 서브에이전트 | GitHub 레포 탐색·라이선스 감사 (dev/github-plan 타입에서 선행) | Phase 2 |
+| **member-reviewer** | 서브에이전트 | 산출물 품질 검토 보조 | Phase 3 (팀장 보조) |
 
 #### Team Lead (CLAUDE.md) 핵심 섹션 목록
 
@@ -445,13 +503,17 @@ execution:
 
 ### 3.4 스킬/스크립트 파일 목록
 
-| 스킬 | 역할 | 트리거 조건 | 주요 스크립트 |
-|------|------|------------|--------------|
-| **task-planner** | Task를 Assignment으로 분해, 의존성 DAG 생성 | Phase 1에서 Team Lead가 호출 | `validate-plan.py`: plan.md 구조 검증 (순환 의존성, Assignment 수, 형식) |
-| **artifact-reviewer** | 산출물 품질 검토 지원 | Phase 3에서 Team Lead가 호출 | `check-artifact.py`: 파일 존재, 필수 섹션, 형식 검증 |
-| **integrator** | 개별 산출물을 최종 결과물로 병합 | Phase 4에서 Team Lead가 호출 | `merge-artifacts.py`: 파일 병합, 포맷 변환 |
-| **shared/file-io** | 파일 읽기/쓰기 유틸리티 | 모든 에이전트가 필요 시 호출 | `read-file.py`, `write-file.py` |
-| **shared/data-parser** | 다양한 형식(xlsx, csv, json, md) 데이터 파싱 | 입력 데이터 처리 시 | `parse-data.py` |
+| 스킬 | 역할 | 주 사용자 |
+|------|------|---------|
+| **task-planner** | Task를 Assignment으로 분해, 의존성 DAG 생성 | Team Lead (Phase 1) |
+| **artifact-reviewer** | 산출물 품질 검토 지원 | Team Lead (Phase 3) |
+| **integrator** | 개별 산출물을 최종 결과물로 병합 | Team Lead (Phase 4) |
+| **deploy-heal** | 배포 실행 → 헬스체크 → 실패 시 롤백 자동화 | member-epsilon |
+| **github-researcher** | GitHub 공개 레포 탐색, 코드 패턴 분석, 라이선스 감사 | member-eta |
+| **fewer-permission-prompts** | 권한 확인 프롬프트 최소화 (AUTO 모드 지원) | Team Lead |
+| **shared/file-io** | 파일 읽기/쓰기 유틸리티 | 전 Member |
+| **shared/data-parser** | xlsx, csv, json, md 데이터 파싱 | member-alpha |
+| **shared/web-research** | WebSearch + WebFetch 래퍼 | member-gamma |
 
 ### 3.5 데이터 전달 상세
 
@@ -588,15 +650,14 @@ execution:
 
 > 자주 사용될 것으로 예상되는 팀 구성 프리셋 목록.
 
-| 프리셋명 | 팀원 구성 | 적합한 업무 유형 |
+| 프리셋명 | 멤버 흐름 | 적합한 업무 유형 |
 |---------|----------|----------------|
-| `research-report` | alpha · gamma · delta · beta | 조사 → 팩트체크 → 시각화 → 보고서 작성 |
-| `code-review` | alpha · gamma · beta | 코드 스캔 → 논리·보안 검증 → 리뷰 요약 |
-| `multilingual-brief` | alpha · beta · delta | 조사 → 요약 → 다국어 시각자료 |
-| `dev` | alpha · epsilon | 구현 방향 분석 → OpenCode 코드 수정 → 배포 |
-| `data-pipeline` | data-collector + data-processor + reporter | 데이터 수집 → 가공 → 리포트 |
-| `strategy-brief` | market-scanner + competitor-analyst + strategist | 시장조사 → 경쟁사 분석 → 전략 제언 |
-| `document-review` | drafter + reviewer + finalizer | 초안 작성 → 검토 → 최종 편집 |
+| `research-report` (기본값) | alpha → gamma → delta → beta | 조사 → 팩트체크 → 시각화 → 보고서 작성 |
+| `code-review` | alpha → gamma → beta | 코드 스캔 → 논리·보안 검증 → 리뷰 요약 |
+| `multilingual-brief` | alpha → beta → delta | 조사 → 다국어 요약·번역 → 시각자료 |
+| `dev` | **eta** → alpha → epsilon | GitHub 레퍼런스 → 구현 방향 분석 → 코드 수정·배포 |
+| `design` | alpha → zeta | 사전 리서치 → 에이전트 설계서 작성 |
+| `github-plan` | eta → alpha → beta | 레포 탐색·라이선스 감사 → 방향 분석 → 구현 계획 보고서 |
 
 ---
 
@@ -610,18 +671,19 @@ execution:
 ## Task
 - Name: {task name}
 - Description: {description}
+- Workspace: output/{slug}/
 
 ## Assignments
 
 ### Assignment 1: {member-name}
 - 범위: ...
-- 기대 산출물: /output/{member-name}/{file}
+- 기대 산출물: output/{slug}/{member-name}/{file}
 - 의존성: 없음 | Assignment N 완료 후
 
 ### Assignment 2: {member-name}
 - 범위: ...
 - 기대 산출물: ...
-- 의존성: Assignment 1 (/output/{member-name}/{file})
+- 의존성: Assignment 1 (output/{slug}/{member-name}/{file})
 
 ## Execution Order
 1. Assignment 1 (독립)

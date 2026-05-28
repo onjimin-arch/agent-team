@@ -5,7 +5,7 @@ This skill helps the Team Lead decompose a task into assignments, determine depe
 
 ## When to Use
 - Phase 1: PLAN
-- When the Team Lead needs to generate or revise `/output/plan.md`
+- When the Team Lead needs to generate or revise `output/{slug}/plan.md`
 
 ## Outputs
 - Plan document with an assignment list

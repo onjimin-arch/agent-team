@@ -175,7 +175,6 @@ AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 
 위 단계를 거치지 않은 `dev` 타입 작업은 **규약 위반**입니다.
 
-
 ### 1-1. Task 분해
 1. Analyze the user task description.
 2. Decompose the task into assignments matching each **활성 멤버**'s role (비활성 멤버에게는 작업을 배정하지 않음).

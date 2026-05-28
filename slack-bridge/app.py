@@ -29,6 +29,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from agent_runner import run_team_lead
 from slug import slugify
 from state import (
+    find_latest_task_for_channel,
     find_task_by_thread,
     get_cancel_event,
     get_slug_wait,
@@ -79,21 +80,6 @@ _SLUG_LINE_RE = re.compile(r"^\s*슬러그\s*[:：]\s*([a-z0-9][a-z0-9\-]*)\s*$"
 _BARE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,64}$")
 _CANCEL_WAIT_TIMEOUT = 45.0  # 중단 신호 후 스레드 join 대기 최대 초
 
-_COMMAND_KEYWORDS = [
-    "리서치", "분석", "보고서", "시장", "정책", "현황", "조사", "research", "report",
-    "코드 리뷰", "code review", "리뷰해", "pr",
-    "영문", "번역", "다국어", "english", "translate", "브리프",
-    "개발", "배포", "버그", "기능 추가", "implement", "deploy", "fix", "refactor",
-    "깃허브", "github", "오픈소스", "공개 코드", "레퍼런스",
-    "설계", "아키텍처", "design", "spec", "blueprint",
-    "만들어", "작성해", "해줘", "해 줘", "만들자", "짜줘",
-]
-
-
-def _is_command(text: str) -> bool:
-    t = text.lower()
-    return any(k in t for k in _COMMAND_KEYWORDS)
-
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 
 
@@ -139,7 +125,16 @@ def on_message(event, say, client):
     if _route_thread_followup(event, client, text, channel, thread_ts, user):
         return
 
-    # 3. 새로운 명령어 처리
+    # 3. DM 폴백 — 스레드 매칭 실패 시 채널의 마지막 태스크를 후속으로 처리
+    if NEW_TOPIC_TRIGGER not in text and text:
+        latest = find_latest_task_for_channel(channel)
+        if latest and latest.get("slug"):
+            _post(client, channel, thread_ts,
+                  text=f"🔁 후속 지시 접수 — `{latest['slug']}` 이어서 처리합니다.")
+            _start_followup_task(latest["slug"], text, channel, thread_ts, user, client)
+            return
+
+    # 4. 새로운 명령어 처리
     _handle_trigger(event, say, text, channel, thread_ts, user, client)
 
 

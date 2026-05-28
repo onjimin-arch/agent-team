@@ -146,3 +146,18 @@ def pop_slug_wait(user_id: str) -> dict[str, Any] | None:
 
 def get_slug_wait(user_id: str) -> dict[str, Any] | None:
     return _load(_DM_SLUG_WAIT).get(user_id)
+
+
+# ---------- DM 마지막 태스크 조회 ----------
+
+def find_latest_task_for_channel(channel: str) -> dict[str, Any] | None:
+    """채널에서 가장 최근에 생성된 태스크를 반환 (thread_ts 없는 DM 후속 지원용)."""
+    tasks = _load(_TASKS)
+    candidates = [
+        {"task_id": tid, **payload}
+        for tid, payload in tasks.items()
+        if payload.get("channel") == channel and payload.get("slug")
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda t: t.get("created_at", 0))
