@@ -68,7 +68,7 @@ Step 3  결과를 WS/member-epsilon/dev-log.md에 기록
 ```
 
 ### AUTO 모드 에스컬레이션 조건
-아래 상황에서만 대기 없이 Slack에 즉시 보고 (`/report` 엔드포인트 경유):
+아래 상황에서만 대기 없이 stdout으로 출력 (slack-bridge가 Slack 스레드에 자동 중계):
 - 서비스 타입 감지 실패 (`unknown`)
 - `MAX_ATTEMPTS` 초과 후 롤백 완료
 - Production health check 최종 실패

@@ -58,13 +58,6 @@ _allowed_raw = (
 )
 ALLOWED_USERS = {u.strip() for u in _allowed_raw.split(",") if u.strip()}
 
-# 인사말 패턴 (이모지 및 일반 인사)
-_GREETING_PATTERNS = [
-r"^안녕", r"^반가워", r"^하이", r"^안녕하세", r"^여러", r"^오늘",
-r"^hello", r"^hi", r"^hey", r"^good morning", r"^good afternoon", r"^good evening",
-r"^ㅈㅓ", r"^ㅇㅈ", r"^ㅎㅇ", r"^[👋😀😄😁]",
-]
-
 def _load_new_topic_trigger() -> str:
     config_path = Path(__file__).parent.parent / ".claude" / "configs" / "team-config.yaml"
     try:
@@ -219,14 +212,6 @@ def _cancel_and_wait(task_id: str, client, channel: str, thread_ts: str | None, 
 
 
 # ---------- '신규 주제' 트리거 ----------
-
-def _is_greeting(text: str) -> bool:
-    """인사말인지 판별 (대소문자 구분 없이 매칭)."""
-    text_lower = text.lower().strip()
-    for pattern in _GREETING_PATTERNS:
-        if re.match(pattern, text_lower):
-            return True
-    return False
 
 def _is_command(text: str) -> tuple[bool, str]:
     """
