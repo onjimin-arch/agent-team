@@ -24,7 +24,7 @@ task:
       triggers: ["영문", "번역", "다국어", "english", "translate", "브리프"]
       description: "다국어 브리프. alpha 조사 → beta 다국어 요약·번역 → delta 시각자료(비교 테이블·레이아웃)."
     - name: "dev"
-      members: ["member-alpha", "member-epsilon"]
+      members: ["member-eta", "member-alpha", "member-epsilon"]
       triggers: ["개발", "코드", "배포", "수정", "버그", "기능 추가", "implement", "deploy", "fix", "refactor"]
       description: "리서치 → 코드 수정 → 자체 검증 → 배포 워크플로우. alpha 가 구현 방향 분석, epsilon 이 코드 수정·검증·배포 실행."
       deployment:
@@ -209,7 +209,7 @@ execution:
     trigger_prefix: "[AUTO:"
     interrupt_policy: "none"
     escalation_channel: "slack"
-    escalation_endpoint: "http://localhost:5000/report"
+    escalation_method: "stdout"  # slack-bridge agent_runner가 stdout을 읽어 Slack 스레드에 중계
     review_direct_edit_threshold: 30
     auto_log_file: "auto-log.md"
 
@@ -221,6 +221,14 @@ environment:
 # Phase 5: Distribution (배포) 단계가 사용할 외부 시스템 설정.
 # Phase 5 는 human_approval 통과 후 team-lead 가 실행.
 distribution:
+  # Slack 으로 결과물 링크 전송 (개발 요청용)
+  slack:
+    enabled: true
+    channel: "${SLACK_REPORT_CHANNEL:-#agent-log}"
+    include_download_link: true
+    # 다운로드 링크 접두사 (실제 파일 서버 URL 로 설정)
+    download_link_prefix: "https://agent-team.barogo.local/output/"
+
   # Notion 저장 위치 (리서치/분석 BOT DB)
   notion:
     enabled: true

@@ -45,7 +45,9 @@ from state import (
 
 load_dotenv(Path(__file__).parent / ".env")
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.getLogger("slack_bolt").setLevel(logging.WARNING)
+logging.getLogger("slack_sdk").setLevel(logging.WARNING)
 log = logging.getLogger("slack-bridge")
 
 _allowed_raw = (
@@ -76,6 +78,21 @@ _MENTION_RE = re.compile(r"<@[UW][A-Z0-9]+(\|[^>]+)?>")
 _SLUG_LINE_RE = re.compile(r"^\s*슬러그\s*[:：]\s*([a-z0-9][a-z0-9\-]*)\s*$", re.IGNORECASE)
 _BARE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,64}$")
 _CANCEL_WAIT_TIMEOUT = 45.0  # 중단 신호 후 스레드 join 대기 최대 초
+
+_COMMAND_KEYWORDS = [
+    "리서치", "분석", "보고서", "시장", "정책", "현황", "조사", "research", "report",
+    "코드 리뷰", "code review", "리뷰해", "pr",
+    "영문", "번역", "다국어", "english", "translate", "브리프",
+    "개발", "배포", "버그", "기능 추가", "implement", "deploy", "fix", "refactor",
+    "깃허브", "github", "오픈소스", "공개 코드", "레퍼런스",
+    "설계", "아키텍처", "design", "spec", "blueprint",
+    "만들어", "작성해", "해줘", "해 줘", "만들자", "짜줘",
+]
+
+
+def _is_command(text: str) -> bool:
+    t = text.lower()
+    return any(k in t for k in _COMMAND_KEYWORDS)
 
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 
@@ -256,34 +273,24 @@ def _is_command(text: str) -> tuple[bool, str]:
 
 def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, user: str, client) -> None:
     say_kwargs = {"thread_ts": thread_ts} if thread_ts else {}
-    
-    # 1. 인사말 체크
-    if _is_greeting(text):
-        # 인사말에는 간단한 답만
-        _post(client, channel, thread_ts, text="안녕하세요! 무엇을 도와드릴까요?\n\n명령 예시:\n• `새 작업 2026 년 시장 분석`\n• `개발: 로그인 버그 수정`")
-        return
-    
-    # 2. 명령어 파싱
-    is_cmd, task_type = _is_command(text)
-    
-    # 3. NEW_TOPIC_TRIGGER 가 있으면 기존 로직 유지
-    if NEW_TOPIC_TRIGGER in text:
+
+    has_trigger = NEW_TOPIC_TRIGGER in text
+    if has_trigger:
         task_desc = text.replace(NEW_TOPIC_TRIGGER, "", 1).strip(" -:·")
-        slug = slugify(task_desc)
-        say(
-            text=f"✅ 시작: `{slug}`\n> {task_desc}\n저장 경로: `output/{slug}/`",
-            **say_kwargs,
-        )
-        _start_new_task(slug, task_desc, channel, thread_ts, user, client)
+    else:
+        task_desc = text
+
+    is_cmd, task_type = _is_command(task_desc)
+
+    # 업무 키워드가 없는 일반 대화는 작업 시작하지 않음
+    if not has_trigger and not is_cmd:
+        say("안녕하세요! 업무 요청을 입력해 주세요.\n예) `2026년 배달 시장 분석해줘`", **say_kwargs)
         return
-    
-    # 4. 그 외 명령어 처리
-    if not is_cmd:
-        # 명령어가 아니면 응답 안 함
+
+    if not task_desc:
+        say("업무 내용을 입력해 주세요. 예) `바로고 배달 시장 분석해줘`", **say_kwargs)
         return
-    
-    # 5. 태스크 타입별 처리
-    task_desc = text
+
     slug = slugify(task_desc)
     
     # 타입별 아이콘 및 라벨
