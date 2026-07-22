@@ -185,6 +185,8 @@ termination:
   max_cycles: 3
   max_review_per_member: 2
   quality_criteria:
+    # "rule"/"schema" 는 scripts/validate_artifact.py 로 결정론적으로 강제된다 (CLAUDE.md Phase 3-0/4).
+    # "llm_self_check" 만 팀장 LLM이 직접 판단한다.
     - type: "rule"
       description: "모든 Member 산출물의 필수 섹션 포함"
     - type: "llm_self_check"
@@ -220,8 +222,12 @@ environment:
 
 # Phase 5: Distribution (배포) 단계가 사용할 외부 시스템 설정.
 # Phase 5 는 human_approval 통과 후 team-lead 가 실행.
+# 실행: CLAUDE.md Phase 5 참조. MCP 도구가 없는 실행 환경(opencode 서브프로세스 등)에서는
+# scripts/slack_publish.py · scripts/notion_publish.py 폴백을 사용한다.
 distribution:
   # Slack 으로 결과물 링크 전송 (개발 요청용)
+  # 실행: scripts/slack_publish.py --channel "{channel}" --blocks-file "WS/slack-notification.json"
+  # 필요 조건: 봇이 이 채널의 멤버여야 함 (스크립트가 자동 join 시도, 실패 시 /invite 안내 반환)
   slack:
     enabled: true
     channel: "${SLACK_REPORT_CHANNEL:-#agent-log}"
@@ -230,6 +236,8 @@ distribution:
     download_link_prefix: "https://agent-team.barogo.local/output/"
 
   # Notion 저장 위치 (리서치/분석 BOT DB)
+  # 실행: notion-create-pages MCP 도구 우선, 없으면 scripts/notion_publish.py 폴백.
+  # 폴백 사용 시 환경변수 NOTION_API_TOKEN 필요 (slack-bridge/.env.example 참조).
   notion:
     enabled: true
     database_url: "https://www.notion.so/barogohq/348363ae08db802cb0d6e5316d0eaabc"

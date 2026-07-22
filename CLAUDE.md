@@ -208,33 +208,67 @@ For each assignment:
 - Use the member's `AGENT.md` template and skills from config.
 
 ## Phase 3: Review Protocol
-각 멤버 산출물에 대해 독립 리뷰어 서브에이전트(`member-reviewer`)를 `Agent` 도구로 실행한다.
+각 멤버 산출물마다 **3-0 결정론적 검증 → 3-1 격리된 의미 검토** 두 단계를 순서대로 거친다.
 
-### 리뷰어 호출 방식
-subagent_type: `member-reviewer`
+### 3-0. 결정론적 검증 (필수 — LLM 판단 없이 기계적으로 통과/실패)
+`Bash` 로 `scripts/validate_artifact.py` 를 실행해 config의 `expected_files.required_sections` 충족 여부를
+먼저 확인한다:
 
-리뷰어에게 전달할 컨텍스트 (격리 원칙: 작성 맥락 차단):
-- 리뷰 대상 산출물 파일 경로 및 내용
-- config의 `expected_files` (required_sections, format)
-- task type 및 task summary (멤버 지시사항 원문 제외)
+```
+python scripts/validate_artifact.py --file "WS/{member}/{file}" --sections "개요,분석 결과,결론"
+```
 
-리뷰어에게 전달 금지:
-- 팀장이 멤버에게 전달한 지시사항 원문
-- plan.md의 작성 경위·의도
-- 다른 멤버 산출물 (멤버 간 격리 유지)
+- exit code 0 (`all_pass: true`) → 3-1로 진행.
+- exit code 1 → `missing_sections`/`empty_sections` 목록을 그대로 `REASSIGN` 사유로 사용한다.
+  (누락 내용을 Team Lead가 임의로 지어내 EDIT 처리하지 않는다 — 실제로 빠진 내용이므로 멤버 재실행이 원칙.
+  단, 오탈자 수준의 헤딩명 불일치처럼 내용은 이미 있고 제목만 다른 경우에 한해 EDIT로 헤딩만 정정 가능.)
+
+이 단계는 "필수 섹션 포함"(`termination.quality_criteria` 의 `rule`/`schema` 항목)을 사람의 눈이나
+LLM 자기판단이 아니라 스크립트로 강제하기 위한 것이다 — 신뢰성의 핵심.
+
+### 3-1. 격리된 의미 검토 (독립 리뷰어)
+**중요**: 이 세션의 `Agent` 도구에는 `member-reviewer` 라는 subagent_type 이 등록되어 있지 않다
+(사용 가능한 타입은 `general-purpose`, `Explore`, `Plan` 등 고정 목록뿐). 그래서 의미 검토의 격리는
+아래 두 방법 중 **현재 실행 환경에서 실제로 격리가 되는 쪽**을 사용한다.
+
+**방법 A (기본 — opencode/CLI 서브프로세스 환경, Bash 사용 가능할 때)**
+`scripts/review_artifact.py` 를 호출한다. 이 스크립트는 임시 디렉터리를 cwd로 하는 완전히 별도의
+OS 프로세스를 새로 띄워 member-reviewer/AGENT.md 내용 + 산출물 본문 + spec + task 요약만 프롬프트로
+전달한다 — plan.md, 다른 멤버 산출물, 팀장 지시사항 원문은 그 프로세스의 파일시스템에 아예 존재하지
+않으므로 프롬프트 상의 "격리 원칙" 문구에만 의존하지 않고 실제로 접근이 불가능하다.
+
+```
+python scripts/review_artifact.py \
+  --artifact "WS/{member}/{file}" \
+  --sections "개요,분석 결과,결론" \
+  --task-type "{task type}" \
+  --task-summary "{한 줄 요약}" \
+  --out "WS/{member}/.review-verdict.md"
+```
+exit code: `APPROVE`=0, `EDIT`=2, `REASSIGN`=3, 파싱 실패=1 (파싱 실패 시 `.review-verdict.md` 원문을 직접 읽고 판단).
+
+**방법 B (대안 — 대화형 Claude Code 세션에서 opencode 바이너리가 없을 때)**
+`Agent` 도구를 `subagent_type: "general-purpose"` 로 호출하되, 프롬프트에는
+`.claude/agents/member-reviewer/AGENT.md` 전문 + 리뷰 대상 산출물 + spec + task 요약만 포함시킨다.
+Agent 도구는 이름에 관계없이 항상 새 컨텍스트로 콜드스타트하므로, 팀장의 대화 맥락(지시사항 원문,
+plan.md 작성 경위, 다른 멤버 산출물)은 자동으로 격리된다.
+
+두 방법 모두 리뷰어에게 전달 금지: 팀장이 멤버에게 전달한 지시사항 원문 / plan.md의 작성 경위·의도 /
+다른 멤버 산출물.
 
 ### 리뷰어 판정 처리
-리뷰어가 반환한 판정을 수신 후:
 - `APPROVE` → 해당 산출물 승인, Phase 4로 진행
 - `EDIT(내용)` → Team Lead가 직접 편집 (minor changes only)
 - `REASSIGN(사유)` → 해당 멤버에게 재배정, 수정 지침 포함
 
-Record results in `WS/review-log.md`.
+Record results (3-0 검증 결과 + 3-1 판정 원문 요약) in `WS/review-log.md`.
 
 ## Phase 4: Integration Protocol
 - Collect approved artifacts.
 - Merge them into `WS/final/final-artifact.md` or the configured final output format.
-- Validate integration quality against config criteria.
+- Validate integration quality against config criteria:
+  - **결정론적 부분** (`rule`/`schema` 기준): `scripts/validate_artifact.py --file "WS/final/final-artifact.md" --sections "..."` 로 최종 산출물도 다시 검증한다 (개별 멤버 산출물이 통과했어도 통합 과정에서 섹션이 누락될 수 있음).
+  - **`llm_self_check` 기준**(논리적 정합성·중복/모순): 이 부분만 Team Lead가 직접 읽고 판단한다.
 - If integration fails, rerun execution cycles up to `termination.max_cycles`.
 
 ## Termination Protocol
@@ -248,19 +282,49 @@ If human approval is required, present the final artifact for review. **승인�
 ## Phase 5: Distribution Protocol
 `human_approval` 통과 후 팀장이 실행합니다. `team-config.yaml` 의 `distribution` 섹션에서 각 엔드포인트의 `enabled` 플래그를 확인하고, true 인 것만 실행합니다.
 
-### 5-1. Notion 저장 (`distribution.notion.enabled: true`)
-- `data_source_id` 로 `notion-create-pages` 호출
-- 페이지 제목 속성(`title_property`, 기본 `이름`): `{워크스페이스 한글 제목} ({YYYY-MM-DD})`
-- 아이콘: `distribution.notion.icon` 값 사용
-- 본문: `WS/final/final-artifact.md` 전체 (최상위 H1 title 은 제거 — 페이지 title 로 대체됨)
+각 엔드포인트는 **먼저 그 환경에서 실제로 쓸 수 있는 도구(MCP 등)가 있는지 확인**하고,
+없으면 `scripts/`의 토큰 기반 폴백 스크립트로 넘어갑니다 — 과거에는 MCP 도구 호출만 문서화되어 있어서
+opencode 서브프로세스 실행 환경(MCP 커넥터 없음)에서 매번 자격 없음(no-credential) 실패로 끝났습니다
+(`output/방식-영어-퀴즈-게임-개발/auto-log.md`, `output/회의-녹음-텍스트-변환을-회의록/review-log.md` 참조).
+
+### 5-1. Slack 채널 배포 (`distribution.slack.enabled: true`)
+- `Bash` 로 `scripts/slack_publish.py` 실행 (봇이 채널 멤버가 아니면 자동으로 join 을 먼저 시도한다):
+  ```
+  python scripts/slack_publish.py --channel "{distribution.slack.channel}" \
+    --blocks-file "WS/slack-notification.json"
+  ```
+- `not_in_channel` + join 실패로 반환되면(비공개 채널 등) — 스크립트가 알려주는 `/invite @agent-team-bot`
+  안내 문구를 그대로 5-4 기록과 사용자 보고에 사용한다. 재시도하지 말고 다음 엔드포인트로 진행한다.
+- `include_download_link: true` 면 `download_link_prefix + {slug}/final/final-artifact.md` 를 blocks 에
+  포함시켜 둔다 (slack-notification.json 생성 시점에 반영).
+
+### 5-2. Notion 저장 (`distribution.notion.enabled: true`)
+**우선순위 1 — MCP 도구 사용 가능 시 (대화형 Claude Code + Notion 커넥터 연결됨)**:
+- `data_source_id` 로 `notion-create-pages` 호출.
+
+**우선순위 2 — MCP 도구 없을 시 (opencode 서브프로세스 등)**:
+- `Bash` 로 `scripts/notion_publish.py` 실행 (환경변수 `NOTION_API_TOKEN` 필요 — 없으면 스크립트가
+  발급 방법을 안내하며 즉시 실패 반환하므로 그 안내를 그대로 사용자에게 전달):
+  ```
+  python scripts/notion_publish.py --file "WS/final/final-artifact.md" \
+    --data-source-id "{distribution.notion.data_source_id}" \
+    --title-property "{distribution.notion.title_property}" \
+    --icon "{distribution.notion.icon}" \
+    --title "{워크스페이스 한글 제목} ({YYYY-MM-DD})"
+  ```
+
+두 방법 공통:
+- 본문: `WS/final/final-artifact.md` 전체 (최상위 H1 title 은 제거 — 페이지 title 로 대체됨. `notion_publish.py`
+  사용 시 이 처리는 스크립트가 자동으로 수행함)
 - 성공 시 반환된 Notion 페이지 URL 을 `WS/review-log.md` 하단 "Distribution" 섹션에 기록
 
-### 5-2. Gmail / Drive / Calendar (`enabled: false` 이면 skip)
+### 5-3. Gmail / Drive / Calendar (`enabled: false` 이면 skip)
 - 현재 기본값은 false. 실제 사용 시점에 인증 후 활성화.
 
-### 5-3. 기록
+### 5-4. 기록
 - Phase 5 실행 결과(각 엔드포인트 성공/실패, URL, 시각)를 `WS/review-log.md` 의 "Distribution" 섹션에 추가.
-- 하나라도 실패하면 에러 메시지를 기록하고 사용자에게 보고. 전체 프로세스는 종료하지 않음(이미 최종 승인됐으므로).
+- 하나라도 실패하면 에러 메시지와 스크립트가 반환한 `hint`를 그대로 기록하고 사용자에게 보고.
+  전체 프로세스는 종료하지 않음(이미 최종 승인됐으므로).
 
 ## Handoff Rules
 - All intermediate content is file-based.
@@ -297,6 +361,17 @@ slug: {slug}
 |-----------|------|-----|
 | notion    | 성공 | https://notion.so/... |
 ```
+
+## Deterministic Tools (`scripts/`)
+Phase 3/5 신뢰성을 위해 LLM 판단 대신 스크립트로 강제하는 지점들. 모두 외부 의존성 없이
+(Python stdlib만 사용) 어떤 실행 환경에서도 `Bash` 로 바로 호출 가능하다.
+
+| 스크립트 | 용도 | 실패 시 |
+|---|---|---|
+| `scripts/validate_artifact.py` | 필수 섹션 존재/공백 여부 결정론적 검증 (Phase 3-0) | REASSIGN 사유로 사용 |
+| `scripts/review_artifact.py` | 격리된 서브프로세스에서 member-reviewer 판정 실행 (Phase 3-1) | `.review-verdict.md` 원문 직접 확인 |
+| `scripts/notion_publish.py` | `NOTION_API_TOKEN` 기반 Notion 페이지 생성 (MCP 미가용 시 Phase 5 폴백) | hint 메시지 그대로 보고 |
+| `scripts/slack_publish.py` | Slack 채널 join 선점검 + 발송 (Phase 5) | hint 메시지 그대로 보고, 다음 단계 계속 |
 
 ## Skills Reference
 Your authorized skills:

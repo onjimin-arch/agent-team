@@ -37,6 +37,7 @@ Slack DM 및 채널 멘션으로 팀장 에이전트를 호출하기 위한 로�
 | `im:write` | DM 채널 열기 |
 | `channels:history` | 채널 메시지 읽기 (멘션용) |
 | `channels:read` | 채널 정보 조회 |
+| `channels:join` | Phase 5 배포 채널(`distribution.slack.channel`)에 봇이 자동 참여 (`scripts/slack_publish.py`). 없으면 공개 채널도 수동 `/invite` 필요 |
 | `app_mentions:read` | 채널 `@봇` 멘션 수신 |
 
 ### Event Subscriptions
@@ -170,6 +171,25 @@ DM에서 슬러그 없이 보내면 가장 최근 작업의 후속 지시로 자
 ```bash
 python smoke_test.py
 ```
+
+### Phase 5 배포(Notion/Slack) 실패 디버깅
+
+팀장 에이전트가 opencode 서브프로세스 안에서 `../scripts/notion_publish.py`, `../scripts/slack_publish.py`
+를 호출한다 (MCP 커넥터 없이도 동작하는 토큰 기반 폴백, CLAUDE.md Phase 5 참조). 실패하면 각 스크립트가
+JSON으로 원인과 해결 힌트를 출력하므로, 같은 명령을 직접 실행해 원인을 재현할 수 있다:
+
+```bash
+cd ..
+python scripts/notion_publish.py --file output/<slug>/final/final-artifact.md \
+  --data-source-id 348363ae-08db-80aa-ba4a-000b3160d6ed --title-property 이름
+python scripts/slack_publish.py --channel "#agent-log" --text "테스트"
+```
+
+자주 발생하는 실패:
+- `NOTION_API_TOKEN_missing` → `.env`에 토큰 미설정. `https://www.notion.so/my-integrations` 에서 발급 후
+  대상 데이터소스에 Connect 필요.
+- `not_in_channel` (join_error 포함) → 봇이 비공개 채널이거나 `channels:join` 스코프 미부여. 해당 채널에서
+  `/invite @agent-team-bot` 실행.
 
 ### 로그 확인
 
