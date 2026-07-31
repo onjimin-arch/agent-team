@@ -66,6 +66,9 @@ team:
       skills:
         - shared/file-io
         - shared/data-parser
+        - dept-notion-reader
+        - dept-dashboard-reader
+        - sql-reader
       output:
         directory: "member-alpha"
         expected_files:
@@ -219,6 +222,50 @@ environment:
   SLACK_BOT_TOKEN: "${SLACK_BOT_TOKEN}"
   SLACK_REPORT_CHANNEL: "${SLACK_REPORT_CHANNEL:-#agent-log}"
   PROD_PORT: "${PROD_PORT:-8000}"
+  DEPT_NOTION_API_TOKEN: "${DEPT_NOTION_API_TOKEN}"
+  ERP_API_KEY: "${ERP_API_KEY}"
+
+# 다른 부서가 만든 외부 데이터소스(조회 전용)에 대한 설정. member-alpha 가
+# scripts/notion_fetch.py · scripts/dashboard_fetch.py 를 통해 읽기 전용으로 접근한다.
+# 실행: .claude/skills/dept-notion-reader/SKILL.md, .claude/skills/dept-dashboard-reader/SKILL.md 참조.
+external_data_sources:
+  dept_notion:
+    enabled: true
+    token_env: "DEPT_NOTION_API_TOKEN"
+  # 사내 부서별 손익/실적 대시보드 API. 하나의 범용 스크립트(scripts/dashboard_fetch.py)로 호출하고,
+  # base_url/key_env/엔드포인트 상세는 .claude/skills/dept-dashboard-reader/SKILL.md 의 레지스트리
+  # 표에서 관리한다(스크립트 코드 변경 없이 표에 행만 추가하면 새 대시보드 확장 가능).
+  dashboards:
+    erp:
+      enabled: true
+      base_url: "http://10.10.190.25:8000"
+      key_env: "ERP_API_KEY"
+      note: "전사 손익/실적 — 민감 재무 데이터. Phase 5 외부 배포 전 Team Lead가 민감도 재확인"
+    field:   # 현장
+      enabled: false
+      note: "스펙 확인 필요"
+    hr:      # 인사
+      enabled: false
+      note: "스펙 확인 필요 — 개인정보 포함 가능성, 접근 범위 별도 검토 필요"
+    ax:
+      enabled: true
+      base_url: "https://10.10.70.81:8011"
+      key_env: "AX_API_KEY"
+      ca_cert: "certs/ax_server.pem"   # 자가서명 인증서 — dashboard_fetch.py --ca-cert 로 핀 고정
+      note: "AX 사례(cases)/부서 보고서(reports) 데이터. 키 scope(cases/reports)에 따라 403 가능 — 이 키는 둘 다 확인됨. dept 파라미터는 부서 ID(한글 부서명) 기준, 'finance' 같은 영문 코드 아님"
+    market:  # 마켓 인텔리전스
+      enabled: true
+      base_url: "https://barogo-intel.vercel.app"
+      key_env: "MARKET_API_KEY"
+      note: "주간 시장 인텔리전스 브리핑/아카이브 검색/키워드. 공개 Vercel 호스팅, 현재 서버측 인증 미구현(추후 X-API-Key 추가 예정) — 우리 쪽은 이미 헤더를 보내므로 추가되어도 클라이언트 변경 불필요"
+    brand:   # 브랜드
+      enabled: false
+      note: "스펙 확인 필요"
+    legal:   # 법무
+      enabled: false
+      note: "스펙 확인 필요 — 민감도 특히 높음, 접근 승인 절차 별도 검토 필요"
+  # 자유 SELECT 쿼리를 허용하는 별도 DB 게이트웨이가 실제로 필요해지면 여기에 sql_gateway 항목을
+  # 다시 추가하고 scripts/sql_read.py(스텁: scripts/sql_guard.py)를 구현한다. 현재는 미사용.
 
 # Phase 5: Distribution (배포) 단계가 사용할 외부 시스템 설정.
 # Phase 5 는 human_approval 통과 후 team-lead 가 실행.
