@@ -6,7 +6,23 @@
       "Edit(**)",
       "Glob(**)",
       "Grep(**)",
-      "Bash(**)"
+      "Bash(**)",
+      "Read(//c/Users/jmlee/OneDrive - �ٷΰ�/����/Ŭ�ε� �ڵ� ������Ʈ/agent-team/slack-bridge/**)",
+      "PowerShell($proc = Get-WmiObject Win32_Process -Filter \"ProcessId=30984\" -ErrorAction SilentlyContinue; $proc.CommandLine)",
+      "PowerShell($proc = Get-WmiObject Win32_Process -Filter \"ProcessId=30984\"; \"WorkingDir: \" + $proc.ExecutablePath; \"CmdLine: \" + $proc.CommandLine)",
+      "PowerShell(Stop-Process -Id 30984 -Force)",
+      "PowerShell(Get-Process -Id 30984 -ErrorAction SilentlyContinue)",
+      "PowerShell(taskkill /PID 30984 /F)",
+      "PowerShell($logDir = \"c:\\\\Users\\\\jmlee\\\\OneDrive - 바로고\\\\문서\\\\클로드 코드 에이전트\\\\agent-team\\\\slack-bridge\\\\logs\"; if \\(-not \\(Test-Path $logDir\\)\\) { New-Item -ItemType Directory -Path $logDir | Out-Null }; Write-Host \"log dir OK: $logDir\")",
+      "PowerShell($dir = \"c:\\\\Users\\\\jmlee\\\\OneDrive - 바로고\\\\문서\\\\클로드 코드 에이전트\\\\agent-team\\\\slack-bridge\"; $python = \"$dir\\\\.venv\\\\Scripts\\\\python.exe\"; $log = \"$dir\\\\logs\\\\bridge.log\"; Start-Process -FilePath $python -ArgumentList \"app.py\" -WorkingDirectory $dir -RedirectStandardOutput $log -RedirectStandardError \"$dir\\\\logs\\\\bridge-err.log\" -WindowStyle Hidden -PassThru | Select-Object Id, ProcessName)",
+      "PowerShell(Get-Process -Id 25188 -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process -Id 41616 -ErrorAction SilentlyContinue)",
+      "WebFetch(domain:github.com)",
+      "Read(//c/Users/jmlee/OneDrive - �ٷΰ�/����/Ŭ�ε� �ڵ� ������Ʈ/agent-team/output/���-����-����-����-����/**)",
+      "mcp__claude_ai_Notion__notion-create-pages",
+      "Read(//c/Users/jmlee/OneDrive - 바로고/문서/클로드 코드 에이전트/barogo-agent/**)",
+      "Read(//c/Users/jmlee/OneDrive - 바로고/문서/클로드 코드 에이전트/ax-management-system/**)",
+      "Read(//c/Users/jmlee/OneDrive - 바로고/문서/클로드 코드 에이전트/ax-management-system/app/**)"
     ]
   }
 }

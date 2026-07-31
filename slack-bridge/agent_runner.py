@@ -12,11 +12,19 @@ B 플로우(중단+재시작) 지원:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Callable
+
+_ANSI_RE = re.compile(r'\x1b(?:\[[0-9;]*[mGKHFJ]|\][^\x07]*\x07|[^[])')
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub('', text)
 
 
 _WORKSPACE_HINT_INITIAL = """
@@ -46,6 +54,9 @@ _WORKSPACE_HINT_FOLLOWUP = """
 3. 필요한 범위만 수정합니다. 기존 파일은 가능하면 보강하고 관련 섹션만 교체합니다.
 4. 변경 내역을 `output/{slug}/review-log.md` 하단에 "Follow-up ({timestamp})" 섹션으로 추가 기록합니다.
 5. 최종 산출물에 반영이 필요하면 `output/{slug}/final/final-artifact.md` 를 업데이트합니다.
+6. **Phase 5(배포) 재확인**: `review-log.md`의 Distribution 섹션을 확인해, `enabled: true`인
+   엔드포인트(Slack/Notion)가 아직 성공하지 못했다면(미실행·실패 포함) 이번에 다시 시도합니다.
+   최종 산출물 내용이 바뀌었다면 이미 배포된 엔드포인트도 최신 내용으로 다시 배포합니다.
 """
 
 _NOTIFY_COOLDOWN = 2.5
@@ -56,7 +67,7 @@ def run_team_lead(
     task_description: str,
     *,
     notify: Callable[[str], None],
-    request_approval: Callable[[str, dict], str] | None = None,
+    notify_progress: Callable[[str], None] | None = None,
     cancel_event: threading.Event | None = None,
     follow_up: bool = False,
 ) -> dict[str, Any]:
@@ -64,6 +75,11 @@ def run_team_lead(
 
     follow_up=True 면 기존 워크스페이스에 대한 후속 지시 처리 모드로 동작.
     cancel_event 가 set 되면 subprocess 를 terminate 하고 status="cancelled" 로 반환.
+
+    `notify` 는 시작/완료/에러 등 이정표성 메시지 — 항상 새 스레드 메시지로 올라간다.
+    `notify_progress` 는 opencode stdout 을 실시간 중계하는 고빈도 진행 로그 전용 —
+    생략하면 `notify` 로 폴백하지만, 지정하면(app.py 처럼 같은 메시지를 계속 갱신하는
+    콜백을 넘기면) 스레드에 메시지가 매번 새로 쌓이지 않는다.
     """
     team_root = Path(os.environ["TEAM_ROOT"])
     workspace = team_root / "output" / topic_slug
@@ -76,15 +92,22 @@ def run_team_lead(
         notify(f"📂 워크스페이스: `output/{topic_slug}/`")
         notify("🤖 팀장 에이전트 실행 — Phase 1~4 시작.")
 
-    result = _run_subprocess(topic_slug, task_description, team_root, notify, cancel_event, follow_up)
+    result = _run_subprocess(
+        topic_slug, task_description, team_root, notify, notify_progress, cancel_event, follow_up
+    )
 
     cancelled = bool(cancel_event and cancel_event.is_set())
     final_path = workspace / "final" / "final-artifact.md"
+    returncode = result.get("returncode")
 
     if cancelled:
         status = "cancelled"
     elif final_path.exists():
         status = "completed"
+    elif returncode not in (0, None):
+        # opencode 서브프로세스가 비정상 종료 — stdout 0줄로 조용히 죽는 케이스 포함
+        # (2026-07-29 output/2026-배달-시장-점유율-분석해줘/auto-log.md 실사례).
+        status = "failed"
     else:
         status = "partial"
 
@@ -101,9 +124,11 @@ def _run_subprocess(
     task_description: str,
     team_root: Path,
     notify: Callable[[str], None],
+    notify_progress: Callable[[str], None] | None,
     cancel_event: threading.Event | None,
     follow_up: bool,
 ) -> dict[str, Any]:
+    progress = notify_progress or notify
     model = os.environ.get("AGENT_MODEL", "anthropic/claude-sonnet-4-6")
     # opencode 모델 형식: "anthropic/..." — claude CLI 형식이면 변환
     if "/" not in model:
@@ -132,13 +157,18 @@ def _run_subprocess(
             f"업무 요청이 접수되었습니다.\n\n"
             f"**업무 설명**: {task_description}\n"
             f"**워크스페이스 슬러그**: `{topic_slug}`\n\n"
-            f"CLAUDE.md 의 팀장 프로토콜에 따라 Phase 1(기획) → 2(실행) → 3(리뷰) → 4(통합) 를 "
-            f"순서대로 수행하세요. 최종 산출물은 `output/{topic_slug}/final/final-artifact.md` 로 저장합니다."
+            f"CLAUDE.md 의 팀장 프로토콜에 따라 Phase 1(기획) → 2(실행) → 3(리뷰) → 4(통합) → "
+            f"5(배포) 를 순서대로 수행하세요. 최종 산출물은 `output/{topic_slug}/final/final-artifact.md` 로 "
+            f"저장합니다. **Phase 5는 사용자가 별도로 요청하지 않아도 항상 수행합니다** — "
+            f"`team-config.yaml` 의 `distribution` 에서 `enabled: true` 인 엔드포인트(Slack/Notion)에 "
+            f"실제로 배포하는 것까지가 이 작업의 기본 범위이며, Phase 1-4 완료만으로 작업이 끝난 것이 "
+            f"아닙니다."
         )
 
     cmd = ["opencode", "run", "--dangerously-skip-permissions", "--model", model, prompt]
 
     artifacts: list[str] = []
+    output_tail: deque[str] = deque(maxlen=60)
     last_notify = 0.0
 
     proc = subprocess.Popen(
@@ -156,6 +186,7 @@ def _run_subprocess(
             line = line.rstrip()
             if not line:
                 continue
+            output_tail.append(line)
 
             if cancel_event and cancel_event.is_set():
                 proc.terminate()
@@ -169,9 +200,9 @@ def _run_subprocess(
             # 진행 상황 Slack 중계 (쿨다운 적용)
             now = time.monotonic()
             if now - last_notify >= _NOTIFY_COOLDOWN:
-                first_line = line.strip().splitlines()[0][:240]
+                first_line = _strip_ansi(line.strip().splitlines()[0])[:240]
                 if first_line and not first_line.startswith("```"):
-                    notify(f"💭 {first_line}")
+                    progress(f"💭 {first_line}")
                     last_notify = now
 
         proc.wait()
@@ -179,9 +210,22 @@ def _run_subprocess(
         proc.terminate()
         raise
 
+    cancelled = bool(cancel_event and cancel_event.is_set())
+    returncode = proc.returncode
+
+    if not cancelled and returncode not in (0, None):
+        # stdout 0줄로 즉시 죽는 경우까지 포함해, 원인 불명 종료를 침묵시키지 않고 그대로 알린다.
+        tail = _strip_ansi("\n".join(output_tail))[-500:]
+        tail = tail or "(출력 없음 — 서브프로세스가 시작 직후 종료된 것으로 보입니다)"
+        notify(
+            f"❌ opencode 프로세스가 비정상 종료되었습니다 (exit code {returncode}).\n"
+            f"최근 출력:\n```{tail}```"
+        )
+
     return {
         "cost_usd": 0.0,
         "turns": 0,
         "artifacts": artifacts,
-        "cancelled": bool(cancel_event and cancel_event.is_set()),
+        "cancelled": cancelled,
+        "returncode": returncode,
     }

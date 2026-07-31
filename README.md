@@ -23,15 +23,19 @@ agent-team/
 │   │   └── member-reviewer/
 │   └── skills/                        # 공용 스킬 (file-io, deploy-heal 등)
 ├── slack-bridge/                      # Slack ↔ 팀장 연결 봇
-│   ├── app.py                         # 이지민 PC용 Slack 봇
-│   ├── app-B-jmlee-N2.py              # 회사 PC(jmlee-N2)용 Slack 봇
+│   ├── app.py                         # Slack 봇 (Socket Mode)
 │   ├── agent_runner.py                # opencode run 서브프로세스 실행기
 │   ├── state.py                       # 작업 상태·스레드 매핑 관리
+│   ├── run-forever.ps1                # app.py 상시 실행 + 자동 재시작 감시 스크립트
+│   ├── register-always-on-task.ps1    # 위 감시 스크립트를 작업 스케줄러에 등록 (관리자 권한 필요)
 │   └── requirements.txt
-├── install-service.ps1                # 회사 PC 작업 스케줄러 등록 스크립트
 └── output/                            # 산출물 저장소 (워크스페이스별 폴더)
     └── .active-workspace              # 현재 활성 작업 슬러그 포인터
 ```
+
+> 다른 PC에서도 봇을 돌리려면 `app-B-<hostname>.py`/`-B-<hostname>.env` 사본을 만들어 관리합니다
+> (반드시 별도 Slack 앱/토큰으로 — 같은 토큰으로 두 프로세스를 동시에 띄우면 이벤트 중복 수신·상태 파일
+> 경합이 발생합니다). 예전 사본은 `_archive/2026-07-29-cleanup/`에 보관돼 있습니다.
 
 ---
 
@@ -72,13 +76,13 @@ agent-team/
 Slack 채널에 작업 내용을 그냥 입력하면 됩니다:
 
 ```
-신규 주제 [리서치] 국내 퀵커머스 시장 현황 분석해줘
-신규 주제 [dev] 로그인 버그 수정 - 토큰 만료 시 재로그인 안 됨
-신규 주제 [설계] queue_server 없이 Slack 직접 연동하는 아키텍처 설계해줘
-신규 주제 [깃허브] FastAPI 기반 큐 시스템 오픈소스 참고해서 구현 계획 세워줘
+새 작업 [리서치] 국내 퀵커머스 시장 현황 분석해줘
+새 작업 [dev] 로그인 버그 수정 - 토큰 만료 시 재로그인 안 됨
+새 작업 [설계] queue_server 없이 Slack 직접 연동하는 아키텍처 설계해줘
+새 작업 [깃허브] FastAPI 기반 큐 시스템 오픈소스 참고해서 구현 계획 세워줘
 ```
 
-`신규 주제` (또는 설정된 NEW_TOPIC_TRIGGER)를 포함하면 새 워크스페이스를 생성합니다.
+`새 작업` (`team-config.yaml`의 `execution.workspace.new_topic_trigger` 값)을 포함하면 새 워크스페이스를 생성합니다.
 
 ### 스레드 메시지 (기존 작업 후속)
 
@@ -135,9 +139,8 @@ AGENT_MODEL=anthropic/claude-sonnet-4-6
 cd slack-bridge
 .venv\Scripts\python app.py
 
-# 회사 PC (jmlee-N2) — 작업 스케줄러 자동 등록
-# 관리자 PowerShell에서:
-.\install-service.ps1
+# 상시 실행 + 자동 재시작 (재부팅/로그오프 이후에도 유지) — 관리자 PowerShell에서:
+.\register-always-on-task.ps1
 ```
 
 ### 3. 팀장 직접 실행 (CLI)

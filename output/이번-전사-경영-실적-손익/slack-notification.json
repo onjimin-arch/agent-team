@@ -1,0 +1,54 @@
+{
+  "text": "승인 대기: 이번-전사-경영-실적-손익 최종본이 Notion에 저장되었고 Slack 최종 배포는 보류 중입니다.",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "승인 대기: 2026-07 전사 경영 실적(손익) 요약"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "⚠️ 사내 대시보드(ERP) 민감 재무 데이터를 사용했습니다. Notion 저장은 완료했고, Slack 등 나머지 외부 배포는 사람 승인 전까지 보류합니다."
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Notion*: https://app.notion.com/p/2026-07-31-3ae363ae08db8175898ee1ad4008c33b"
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Task Type*\nmgmt-planning"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*사이클*\n3 / 3"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*7월 예상 영업손익*\n-199,283,982원"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*전월 대비*\n손실 9,282,074원 확대"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Download*: https://agent-team.barogo.local/output/이번-전사-경영-실적-손익/final/final-artifact.md"
+      }
+    }
+  ]
+}

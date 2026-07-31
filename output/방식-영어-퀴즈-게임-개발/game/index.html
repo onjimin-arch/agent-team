@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>English Quiz Game</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ========== START SCREEN ========== -->
+  <section id="start-screen" class="screen active">
+    <div class="container">
+      <h1 class="game-title">🎓 English Quiz</h1>
+      <p class="game-subtitle">Test your English knowledge!</p>
+
+      <!-- Game Mode Selection -->
+      <div class="section-label">Game Mode</div>
+      <div id="mode-list" class="btn-group game-mode-group" role="group" aria-label="Game mode selection">
+      </div>
+
+      <!-- Today's Review (SM-2) -->
+      <div id="review-panel" class="review-panel hidden">
+        <h2 class="panel-title">📅 Today's Review</h2>
+        <p id="review-count" class="review-count"></p>
+        <button id="review-btn" class="btn btn-secondary">Start Review</button>
+      </div>
+
+      <!-- Category Selection -->
+      <div class="section-label">Choose a Category</div>
+      <div id="category-list" class="card-grid" role="group" aria-label="Category selection">
+      </div>
+
+      <!-- Difficulty Selection -->
+      <div class="section-label">Choose Difficulty</div>
+      <div id="difficulty-list" class="btn-group" role="group" aria-label="Difficulty selection">
+      </div>
+
+      <!-- Start Button -->
+      <button id="start-btn" class="btn btn-primary btn-large" disabled>
+        Start Quiz
+      </button>
+
+      <!-- High Scores -->
+      <div class="high-scores-panel">
+        <h2 class="panel-title">🏆 High Scores</h2>
+        <table id="high-scores-table" class="scores-table" aria-label="High score table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Score</th>
+              <th>Grade</th>
+              <th>Category</th>
+              <th>Difficulty</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="scores-body">
+            <tr><td colspan="6" class="no-scores">No scores yet. Play a game!</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== QUIZ SCREEN ========== -->
+  <section id="quiz-screen" class="screen" aria-live="polite">
+    <div class="container">
+
+      <!-- HUD: Progress + Score + Streak + Timer -->
+      <div class="hud">
+        <div class="hud-left">
+          <span id="question-counter">Question 1 / 10</span>
+        </div>
+        <div class="hud-center">
+          <span id="timer-display" class="timer hidden">⏱ 3:00</span>
+        </div>
+        <div class="hud-right">
+          <span id="lives-display" class="lives">❤️❤️❤️❤️❤️</span>
+          <span id="score-display">Score: 0</span>
+          <span id="streak-display" class="streak hidden">🔥 ×1</span>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="progress-bar-track" aria-label="Quiz progress">
+        <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+      </div>
+
+      <!-- Wildcard Bar -->
+      <div id="wildcard-bar" class="wildcard-bar hidden">
+        <button class="wildcard-btn" data-type="fiftyFifty" aria-label="50:50 wildcard">🎯 50:50 <span class="wc-count">1</span></button>
+        <button class="wildcard-btn" data-type="addTime" aria-label="Add time wildcard">⏱ +Time <span class="wc-count">1</span></button>
+        <button class="wildcard-btn" data-type="shield" aria-label="Shield wildcard">🛡️ Shield <span class="wc-count">1</span></button>
+      </div>
+
+      <!-- Question Card -->
+      <div id="question-card" class="question-card">
+        <div id="question-badge" class="question-badge"></div>
+        <p id="question-text" class="question-text"></p>
+      </div>
+
+      <!-- Answer Options -->
+      <div id="answers-container" class="answers-grid" role="group" aria-label="Answer choices">
+      </div>
+
+      <!-- Fill-in-the-blank -->
+      <div id="fill-blank-input" class="fill-blank-wrapper hidden">
+        <input type="text" class="fill-blank-input" placeholder="Type your answer..." aria-label="Type your answer">
+        <button id="fill-blank-submit" class="btn btn-primary btn-small">Submit</button>
+      </div>
+
+      <!-- Matching area -->
+      <div id="matching-area" class="matching-area hidden" aria-label="Matching exercise">
+      </div>
+      <button id="matching-submit" class="btn btn-primary hidden">Check Matches</button>
+
+      <!-- Sentence complete area -->
+      <div id="sentence-complete-area" class="sentence-complete-area hidden" aria-label="Sentence completion">
+      </div>
+      <button id="sentence-submit" class="btn btn-primary hidden">Check Answers</button>
+
+      <!-- Hint + Speak -->
+      <div class="hint-area">
+        <button id="hint-btn" class="btn btn-secondary btn-small">💡 Show Hint</button>
+        <button id="speak-btn" class="btn btn-secondary btn-small">🔊 Listen</button>
+        <p id="hint-text" class="hint-text hidden"></p>
+      </div>
+
+      <!-- Feedback (aria-live region) -->
+      <div id="feedback-area" class="feedback-area hidden" role="status" aria-live="polite">
+        <p id="feedback-result" class="feedback-result"></p>
+        <p id="feedback-explanation" class="feedback-explanation"></p>
+      </div>
+
+      <!-- Next Button -->
+      <button id="next-btn" class="btn btn-primary hidden">Next →</button>
+
+    </div>
+  </section>
+
+  <!-- ========== RESULT SCREEN ========== -->
+  <section id="result-screen" class="screen">
+    <div class="container">
+      <h2 class="result-title">Quiz Complete!</h2>
+
+      <!-- Score Summary Card -->
+      <div class="result-card">
+        <div id="result-grade" class="result-grade"></div>
+        <div id="result-score" class="result-score"></div>
+        <div id="result-accuracy" class="result-accuracy"></div>
+        <div id="result-streak" class="result-streak-info"></div>
+      </div>
+
+      <!-- Wrong Answers Review -->
+      <div id="wrong-answers-section" class="wrong-answers-section hidden">
+        <h3 class="section-label">Questions to Review</h3>
+        <ul id="wrong-answers-list" class="wrong-answers-list">
+        </ul>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="result-actions">
+        <button id="restart-btn" class="btn btn-primary">Play Again</button>
+        <button id="home-btn" class="btn btn-secondary">Home</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scripts: load order matters -->
+  <script src="data/categories.js"></script>
+  <script src="data/questions.js"></script>
+  <script src="sm2-algorithm.js"></script>
+  <script src="audio.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

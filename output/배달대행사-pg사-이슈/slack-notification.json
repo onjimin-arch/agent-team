@@ -1,0 +1,72 @@
+{
+  "text": "✅ [에이전트 팀] 배달대행사 PG사 이슈 분석 완료",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "✅ 에이전트 팀 보고서 완료",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*주제*\n배달대행사 PG사 이슈 분석"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*작성일*\n2026-07-29"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Task Type*\nresearch-report"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*활성 멤버*\nalpha · gamma · delta · beta"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*사이클*\n1 / 3"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*승인*\nhuman_approval=false (자동 완료)"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*핵심 결과*\n• 핵심 이슈는 결제 연동보다 정산과 자금보호 체계에 있음\n• 일반 카드 수수료 3.2~3.5%, 정산 체감 범위 D+3~D+7로 운전자금 압박이 큼\n• 고객확인, 가상계좌 통제, 예치금 분리 운영이 우선 과제로 제시됨"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*다운로드*\n<https://agent-team.barogo.local/output/배달대행사-pg사-이슈/final/final-artifact.md|최종 보고서 열기>"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Notion*: https://app.notion.com/p/PG-2026-07-29-3ac363ae08db8180afc5d53278efff85"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "로컬 경로: `output/배달대행사-pg사-이슈/final/final-artifact.md` · bridge 자동 합성"
+        }
+      ]
+    }
+  ]
+}

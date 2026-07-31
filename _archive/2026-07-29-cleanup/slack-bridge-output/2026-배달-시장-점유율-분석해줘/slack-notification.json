@@ -1,0 +1,26 @@
+{
+  "text": "2026년 배달 시장 점유율 분석 완료",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "2026년 배달 시장 점유율 분석"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*핵심 요약*\n- 2026년 2월 점유율: 배민 54%, 쿠팡이츠 29%, 요기요 10%, 공공배달앱 약 7%\n- CR3 93%, HHI 3,906의 고집중 시장\n- 배민-쿠팡이츠 격차는 비교 기준상 38.2%p -> 25.0%p로 축소"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "다운로드: https://agent-team.barogo.local/output/2026-배달-시장-점유율-분석해줘/final/final-artifact.md"
+      }
+    }
+  ]
+}

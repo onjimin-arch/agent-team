@@ -1,0 +1,60 @@
+{
+  "channel": "#agent-log",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "2026년 배달 시장 분석 완료",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Task Type*: research-report | *작업일*: 2026-06-04 | *Status*: 최종 승인 완료"
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*글로벌 시장*\n2026년 $284.73B\nCAGR 10.47%"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*국내 점유율*\n배민 54% → 쿠팡이츠 29%\n요기요 10% → 땡겨요 7%"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*핵심 인사이트*\n• 쿠팡이츠 2027년 배민 추월 가능\n• 배민 매각 = 최대 변곡점\n• 생활 물류 플랫폼으로 진화"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*추천 사항*\n• 배민 매각 시나리오 대응\n• AI 물류 인프라 투자\n• 구독·록인 전략 강화"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "<https://agent-team.barogo.local/output/2026-%EB%B0%B0%EB%8B%AC-%EC%8B%9C%EC%9E%A5-%EB%B6%84%EC%84%9D%ED%95%B4%EC%A4%98/final/final-artifact.md|📄 최종 보고서 보기>"
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "Notion 저장 및 Slack 알림 자동 전송 | Phase 1~5 완료 | 리뷰: 4/4 APPROVE"
+        }
+      ]
+    }
+  ]
+}

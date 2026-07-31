@@ -28,7 +28,8 @@ opencode/Claude Code 어느 실행 환경에서도 Bash 로 직접 호출 가능
 비치명적 종료 — 호출자가 이미 완성된 final-artifact.md 는 그대로 두고 계속 진행할 수 있다.
 
 한계 (의도적 단순화 — MCP 커넥터 없이 최소 신뢰성 확보가 목적이지 완벽한 렌더링이 목적이 아님):
-- 마크다운 테이블은 Notion 테이블 블록이 아니라 코드 블록(plain text)으로 보존한다.
+- 마크다운 테이블은 Notion `table`/`table_row` 블록으로 변환한다 (헤더 구분선 `|---|---|` 유무로
+  `has_column_header` 를 판단). 셀 내부 서식은 다른 텍스트와 동일하게 **bold** 만 인식한다.
 - 인라인 서식은 **bold** 만 인식하고 나머지(이탤릭·링크 등)는 원문 그대로 텍스트로 남는다.
 """
 from __future__ import annotations
@@ -134,7 +135,50 @@ _HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)$")
 _BULLET_RE = re.compile(r"^\s*[-*]\s+(.*)$")
 _NUMBERED_RE = re.compile(r"^\s*\d+\.\s+(.*)$")
 _TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$")
 _DIVIDER_RE = re.compile(r"^\s*(?:---+|\*\*\*+|___+)\s*$")
+
+
+def _split_table_row(line: str) -> list[str]:
+    s = line.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    return [c.strip() for c in s.split("|")]
+
+
+def _table_block(table_lines: list[str]) -> dict | None:
+    """GFM 스타일 마크다운 표를 Notion table/table_row 블록으로 변환.
+
+    두 번째 줄이 `|---|---|` 형태의 구분선이면 첫 줄을 헤더로 취급하고 구분선은 버린다.
+    행마다 셀 개수가 다르면 가장 넓은 행 기준으로 빈 셀을 채우거나 잘라 폭을 맞춘다
+    (Notion table_row 는 모든 행의 cells 길이가 table_width 로 동일해야 함).
+    """
+    if not table_lines:
+        return None
+    has_header = len(table_lines) >= 2 and _TABLE_SEP_RE.match(table_lines[1])
+    data_lines = [table_lines[0], *table_lines[2:]] if has_header else table_lines
+    rows = [_split_table_row(l) for l in data_lines]
+    if not rows:
+        return None
+    width = max(len(r) for r in rows)
+    table_rows = []
+    for r in rows:
+        cells = (r + [""] * width)[:width]
+        table_rows.append({
+            "object": "block", "type": "table_row",
+            "table_row": {"cells": [_rich_text(c) for c in cells]},
+        })
+    return {
+        "object": "block", "type": "table",
+        "table": {
+            "table_width": width,
+            "has_column_header": bool(has_header),
+            "has_row_header": False,
+            "children": table_rows,
+        },
+    }
 
 
 def md_to_blocks(markdown_text: str) -> list[dict]:
@@ -180,7 +224,9 @@ def md_to_blocks(markdown_text: str) -> list[dict]:
             while i < len(lines) and _TABLE_ROW_RE.match(lines[i]):
                 table_lines.append(lines[i])
                 i += 1
-            blocks.append(_code_block("\n".join(table_lines), "plain text"))
+            block = _table_block(table_lines)
+            if block:
+                blocks.append(block)
             continue
 
         if _DIVIDER_RE.match(line):

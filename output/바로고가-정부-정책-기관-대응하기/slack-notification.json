@@ -1,0 +1,61 @@
+{
+  "channel": "#agent-log",
+  "text": "바로고 정부 정책·기관 대응 모니터링 채널 조사 완료",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "바로고 정부 정책·기관 대응 채널 조사 완료",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Task Type*: research-report | *작업일*: 2026-07-29 | *Status*: AUTO 모드 최종 완료"
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*우선 채널*\n8개\n입법·정책·노동·거래 규제 중심"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*보조 채널*\n3개\n개인정보·세무·범부처 규제 스캔"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*초기 필수 5개*\n국민참여입법센터\n국회입법예고\n정책브리핑\n고용노동부\n공정거래위원회"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*운영 권고*\n1차 스캔 후\n소관 부처 원문 확인\n영향도 3단계 분류"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Notion*: https://app.notion.com/p/2026-07-29-3ac363ae08db814f9cbafcc255a5138a\n*Download*: <https://agent-team.barogo.local/output/%EB%B0%94%EB%A1%9C%EA%B3%A0%EA%B0%80-%EC%A0%95%EB%B6%80-%EC%A0%95%EC%B1%85-%EA%B8%B0%EA%B4%80-%EB%8C%80%EC%9D%91%ED%95%98%EA%B8%B0/final/final-artifact.md|final-artifact.md>"
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "Phase 3 재검토 후 beta 승인 완료 | 리뷰 4/4 APPROVE | Notion 저장 포함"
+        }
+      ]
+    }
+  ]
+}

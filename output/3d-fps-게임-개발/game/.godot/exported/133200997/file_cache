@@ -1,0 +1,8 @@
+res://resources/default_settings.tres::6c8ddb7f8cc2ce802f83ed6ee9dd8f95::1780140723::res://.godot/exported/133200997/export-02024ad359a88b3a09457f6898681a0a-default_settings.res
+res://resources/pistol.tres::7cbe3b67f668ca68c97bd9d8f8470de7::1780140813::res://.godot/exported/133200997/export-b902541c99e1d1d14c4fef992bf2fe4d-pistol.res
+res://resources/rifle.tres::379ad4bf7fb36e8597a9db35d0ca7d5b::1780140817::res://.godot/exported/133200997/export-e2a05955130147a09e5fcd0fb8bdffb0-rifle.res
+res://scenes/Enemy.tscn::3b090ca3d142c721047148ef2e715e00::1780140851::res://.godot/exported/133200997/export-e8b868f745946f74f22434b9ddd0af8d-Enemy.scn
+res://scenes/HUD.tscn::18ef4d6963ed89f322a199230009835d::1780140884::res://.godot/exported/133200997/export-2ea9781d6f9f7562c1d276c7fdd0b0ab-HUD.scn
+res://scenes/MainMenu.tscn::cfb737ea570fbc0e7a4928645cb5e4e8::1780140903::res://.godot/exported/133200997/export-23c8b2a48d59a0cd018bd8ad5ce7794c-MainMenu.scn
+res://scenes/Player.tscn::5925922acc4246713ea3dffbd7d084a7::1780140966::res://.godot/exported/133200997/export-e8220e74d1354b9e6b168b513689419c-Player.scn
+res://scenes/World.tscn::56310915b0122868d39ab0e73dc16701::1780146657::res://.godot/exported/133200997/export-57a8a85058368be1f5628ef4b8140bf5-World.scn

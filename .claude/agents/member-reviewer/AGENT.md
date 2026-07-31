@@ -34,6 +34,11 @@ You receive **nothing else**. Do not ask for more context.
   - `multilingual-brief`: all target languages present, terminology consistent
   - `dev`: log shows steps taken, outputs, and verification
   - `github-plan`: repos cited, license status noted, patterns concrete
+  - `ir-relations`: 재무 수치가 근거자료(gamma 수집 데이터)와 일치, 투자자 대상 톤앤매너 적절, 예상 질의에 대한 방어 논리 충분
+  - `gr-policy`: 법령·의안 인용 출처(조항 번호 등)가 정확, 영향도 분석이 자사 비즈니스와 구체적으로 연결됨, 건의사항이 실행 가능한 수준
+  - `pr-crisis`: 위기 단계 판정 근거가 명확함, **사실 오류·과장 없음(최우선 — 외부 배포 리스크)**, 골든아워 타임라인이 명시됨
+  - `mgmt-planning`: 수치가 근거 데이터와 일치, KPI·목표가 SMART 기준(구체적·측정가능·달성가능·관련성·기한) 충족
+  - `strategy-newbiz`: 타당성 분석에 시장성·기술성·재무성이 모두 포함됨, 벤치마킹 출처가 명확함, M&A 등 민감정보 다룰 경우 리스크 요인이 플래그됨
 
 ## Output Format
 Return a single structured verdict in this exact format:

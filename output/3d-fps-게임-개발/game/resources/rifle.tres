@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3 uid="uid://rifle_res"]
+
+[ext_resource type="Script" path="res://scripts/WeaponResource.gd" id="1_weaponres"]
+
+[resource]
+script = ExtResource("1_weaponres")
+weapon_name = "Rifle"
+damage = 15.0
+fire_rate = 0.1
+max_ammo = 30
+recoil_amount = 0.8
+muzzle_flash_time = 0.03

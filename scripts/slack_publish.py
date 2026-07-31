@@ -52,6 +52,21 @@ def _call(method: str, token: str, **params) -> dict:
         return {"ok": False, "error": f"network_error: {e.reason}"}
 
 
+def _call_get(method: str, token: str, **params) -> dict:
+    """일부 조회성 메서드(예: conversations.info)는 JSON POST 바디를 받지 않고
+    `invalid_arguments` 로 실패한다 — GET + 쿼리스트링으로 호출해야 하는 전용 헬퍼."""
+    url = f"{API_BASE}/{method}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, method="GET")
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": f"http_{e.code}"}
+    except urllib.error.URLError as e:
+        return {"ok": False, "error": f"network_error: {e.reason}"}
+
+
 def resolve_channel_id(token: str, channel: str) -> tuple[str | None, str | None]:
     """채널명(#foo) 또는 ID(C0123)를 채널 ID로 해석. (채널ID, 에러) 튜플 반환."""
     name = channel.lstrip("#").strip()
@@ -59,7 +74,7 @@ def resolve_channel_id(token: str, channel: str) -> tuple[str | None, str | None
         return name, None  # 이미 ID 형태로 보임
 
     cursor = ""
-    for _ in range(20):  # 최대 20페이지 (2000개 채널) 까지만 탐색
+    for _ in range(20):  # 최대 20페이지 (workspace 규모에 따라 부족할 수 있음 — 아래 참고)
         resp = _call(
             "conversations.list", token,
             types="public_channel,private_channel", limit=200,
@@ -73,12 +88,15 @@ def resolve_channel_id(token: str, channel: str) -> tuple[str | None, str | None
         cursor = resp.get("response_metadata", {}).get("next_cursor", "")
         if not cursor:
             break
-    return None, "channel_not_found"
+    # 채널이 많은(Enterprise Grid 등) 워크스페이스에서는 이름 검색이 페이지 한도 내에
+    # 못 찾고 끝날 수 있다 — 채널 ID(C로 시작)를 --channel 에 직접 넘기면 이 탐색을
+    # 완전히 건너뛰므로(위 fast-path), 그 경우 channel_not_found 대신 이 안내를 반환한다.
+    return None, "channel_search_exhausted"
 
 
 def ensure_member(token: str, channel_id: str) -> tuple[bool, str | None]:
     """채널 멤버인지 확인 후 아니면 join 시도. (성공여부, 에러) 반환."""
-    info = _call("conversations.info", token, channel=channel_id)
+    info = _call_get("conversations.info", token, channel=channel_id)
     if info.get("ok") and info.get("channel", {}).get("is_member"):
         return True, None
 
@@ -126,9 +144,15 @@ def main() -> int:
 
     channel_id, err = resolve_channel_id(token, args.channel)
     if err:
+        hint = "채널을 찾을 수 없습니다. 채널명이 맞는지, 봇이 워크스페이스에 설치되어 있는지 확인하세요."
+        if err == "channel_search_exhausted":
+            hint = (
+                "채널이 매우 많은 워크스페이스라 이름 검색이 탐색 한도 내에 채널을 못 찾았습니다. "
+                "Slack에서 해당 채널의 '채널 ID'(C로 시작하는 값)를 복사해 --channel 인자에 "
+                "이름 대신 직접 넘기면 이 검색을 건너뛰고 바로 동작합니다."
+            )
         print(json.dumps({
-            "success": False, "error": err, "channel": args.channel,
-            "hint": f"채널을 찾을 수 없습니다. 채널명이 맞는지, 봇이 워크스페이스에 설치되어 있는지 확인하세요.",
+            "success": False, "error": err, "channel": args.channel, "hint": hint,
         }, ensure_ascii=False))
         return 1
 

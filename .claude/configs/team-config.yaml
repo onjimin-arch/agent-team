@@ -13,7 +13,7 @@ task:
     - name: "research-report"
       default: true
       members: ["member-alpha", "member-beta", "member-gamma", "member-delta"]
-      triggers: ["리서치", "분석", "보고서", "시장", "정책", "현황", "research", "report"]
+      triggers: ["리서치", "분석", "보고서", "시장", "현황", "research", "report"]
       description: "리서치/분석 보고서. alpha 조사 → gamma 팩트체크 → delta 시각화 → beta 보고서 작성."
     - name: "code-review"
       members: ["member-alpha", "member-gamma", "member-beta"]
@@ -46,6 +46,29 @@ task:
       triggers: ["깃허브", "오픈소스 참고", "github", "공개 코드", "레퍼런스 찾아", "비슷한 구현", "코드 학습"]
       description: "GitHub 공개 코드 탐색 → 패턴 분석 → 구현 계획 수립. eta 가 레포 탐색·라이선스 감사, alpha 가 구현 방향 분석, beta 가 계획 보고서 작성."
       default: false
+    - name: "ir-relations"
+      members: ["member-gamma", "member-alpha", "member-delta", "member-beta"]
+      triggers: ["IR", "실적발표", "주주총회", "주총", "의결권", "애널리스트", "투자자", "주주", "밸류에이션"]
+      description: "IR(투자자관계) 대응. gamma 가 실적·주주 데이터 원문 수집 → alpha 가 재무 분석 → delta 가 IR 자료 시각화 → beta 가 설명자료·Q&A 작성."
+      require_human_approval: true
+    - name: "gr-policy"
+      members: ["member-theta", "member-alpha", "member-beta"]
+      triggers: ["GR", "규제", "입법", "국회", "대관", "정책 대응", "정책 건의", "정부 부처", "로비"]
+      description: "GR(정책·규제 대응). theta 가 정책·입법 동향 모니터링 및 영향도 분석 → alpha 가 대응전략 분석 → beta 가 정책 건의서·답변서 작성."
+      require_human_approval: true
+    - name: "pr-crisis"
+      members: ["member-iota", "member-beta", "member-gamma"]
+      triggers: ["PR", "보도자료", "언론", "미디어", "위기관리", "위기 대응", "브랜드 캠페인", "평판", "기자간담회"]
+      description: "PR(홍보·위기관리). iota 가 언론·SNS 모니터링 및 위기 단계 판정 → beta 가 보도자료·해명자료 작성 → gamma 가 사실관계 최종 검증."
+      require_human_approval: true
+    - name: "mgmt-planning"
+      members: ["member-alpha", "member-delta", "member-beta"]
+      triggers: ["경영계획", "경영기획", "예산", "이사회", "KPI", "경영 실적", "경영 목표", "경영평가"]
+      description: "경영기획·사업계획 관리. alpha 가 경영실적·예산 분석 → delta 가 KPI·이사회 자료 표 작성 → beta 가 경영보고서 작성."
+    - name: "strategy-newbiz"
+      members: ["member-gamma", "member-alpha", "member-delta", "member-beta"]
+      triggers: ["신사업", "M&A", "인수합병", "타당성조사", "포트폴리오", "전략적 제휴", "벤치마킹", "Feasibility"]
+      description: "전략·신사업 추진(M&A 포함). gamma 가 경쟁사·시장 동향 원문 수집 → alpha 가 타당성·포트폴리오 분석 → delta 가 비교 시각화 → beta 가 전략보고서 작성."
 
 team:
   lead:
@@ -62,7 +85,7 @@ team:
     - name: "member-alpha"
       role: "시장 조사 및 데이터 분석 담당"
       domain: "market research"
-      agent_md: ".claude/agents/member-alpha/AGENT.md"
+      agent_md: ".claude/agents/member-alpha(조사)/AGENT.md"
       skills:
         - shared/file-io
         - shared/data-parser
@@ -82,7 +105,7 @@ team:
     - name: "member-beta"
       role: "최종 보고서 초안 작성 담당"
       domain: "report writing"
-      agent_md: ".claude/agents/member-beta/AGENT.md"
+      agent_md: ".claude/agents/member-beta(보고서)/AGENT.md"
       skills:
         - shared/file-io
       output:
@@ -98,10 +121,10 @@ team:
     - name: "member-gamma"
       role: "팩트체커 (인용·수치·출처 검증)"
       domain: "fact checking"
-      agent_md: ".claude/agents/member-gamma/AGENT.md"
+      agent_md: ".claude/agents/member-gamma(팩트체크)/AGENT.md"
       skills:
         - shared/file-io
-        - web-research   # WebSearch · WebFetch 사용
+        - shared/web-research   # WebSearch · WebFetch 사용
       output:
         directory: "member-gamma"
         expected_files:
@@ -115,7 +138,7 @@ team:
     - name: "member-delta"
       role: "시각화 담당 (Mermaid/테이블/차트 스펙)"
       domain: "visualization"
-      agent_md: ".claude/agents/member-delta/AGENT.md"
+      agent_md: ".claude/agents/member-delta(시각화)/AGENT.md"
       skills:
         - shared/file-io
       output:
@@ -131,7 +154,7 @@ team:
     - name: "member-epsilon"
       role: "개발 태스크 실행 담당 (코드 수정·검증·배포)"
       domain: "software development"
-      agent_md: ".claude/agents/member-epsilon/AGENT.md"
+      agent_md: ".claude/agents/member-epsilon(개발)/AGENT.md"
       skills:
         - deploy-heal
         - shared/file-io
@@ -150,7 +173,7 @@ team:
     - name: "member-zeta"
       role: "개발 설계 담당 (에이전트 설계서 작성)"
       domain: "system design"
-      agent_md: ".claude/agents/member-zeta/AGENT.md"
+      agent_md: ".claude/agents/member-zeta(설계)/AGENT.md"
       skills:
         - shared/file-io
       output:
@@ -166,7 +189,7 @@ team:
     - name: "member-eta"
       role: "GitHub 공개 레포 탐색·코드 패턴 분석·라이선스 감사 담당"
       domain: "github research"
-      agent_md: ".claude/agents/member-eta/AGENT.md"
+      agent_md: ".claude/agents/member-eta(OSS리서치)/AGENT.md"
       skills:
         - github-researcher
         - shared/file-io
@@ -184,6 +207,45 @@ team:
               - "Planner를 위한 권고 스택·접근법"
               - "출처 목록"
 
+    - name: "member-theta"
+      role: "GR 정책·규제 동향 모니터링 및 영향도 분석 담당"
+      domain: "government relations / policy research"
+      agent_md: ".claude/agents/member-theta(정책리서치)/AGENT.md"
+      skills:
+        - policy-researcher
+        - shared/web-research
+        - shared/file-io
+      output:
+        directory: "member-theta"
+        expected_files:
+          - name: "gr-policy-report.md"
+            format: "md"
+            required_sections:
+              - "모니터링 조건"
+              - "정책·입법 동향 요약"
+              - "영향도 분석"
+              - "대응 방안 및 건의사항"
+              - "출처 목록"
+
+    - name: "member-iota"
+      role: "PR 언론·SNS 모니터링 및 위기 단계 판정 담당"
+      domain: "media relations / crisis monitoring"
+      agent_md: ".claude/agents/member-iota(PR모니터링)/AGENT.md"
+      skills:
+        - crisis-comms
+        - shared/web-research
+        - shared/file-io
+      output:
+        directory: "member-iota"
+        expected_files:
+          - name: "media-monitoring-log.md"
+            format: "md"
+            required_sections:
+              - "모니터링 요약"
+              - "이슈·위기 단계 판정"
+              - "쟁점별 상세"
+              - "대응 권고"
+
 termination:
   max_cycles: 3
   max_review_per_member: 2
@@ -198,6 +260,14 @@ termination:
       description: "최종 산출물이 기대 형식을 준수"
   human_approval: false
   auto_proceed_on_escalation: true
+  # 실제 외부(투자자·정부·언론)로 나갈 수 있는 고위험 task type — 전역 human_approval 설정과
+  # 무관하게 승인을 강제한다. 처리 로직은 CLAUDE.md "경영전략실 고위험 task type 특별 처리 규칙" 참조.
+  high_risk_task_types: ["ir-relations", "gr-policy", "pr-crisis"]
+  # task type 과 무관하게, 이번 사이클에서 scripts/dashboard_fetch.py(사내 부서 대시보드:
+  # ERP·현장·인사·AX·브랜드·법무)를 실제로 사용했다면 human_approval 을 강제한다. 민감한 내부
+  # 데이터(재무·인사 등)가 포함된 산출물은 task type 분류와 무관하게 항상 사람 승인을 거치도록
+  # 하기 위함. 처리 로직은 CLAUDE.md "사내 대시보드 데이터 사용 시 승인 규칙" 참조.
+  high_risk_if_dashboard_used: true
 
 execution:
   dependency_strategy: "lead_decides"
@@ -220,7 +290,7 @@ execution:
 
 environment:
   SLACK_BOT_TOKEN: "${SLACK_BOT_TOKEN}"
-  SLACK_REPORT_CHANNEL: "${SLACK_REPORT_CHANNEL:-#agent-log}"
+  SLACK_REPORT_CHANNEL: "${SLACK_REPORT_CHANNEL:-#oc-agent-log}"
   PROD_PORT: "${PROD_PORT:-8000}"
   DEPT_NOTION_API_TOKEN: "${DEPT_NOTION_API_TOKEN}"
   ERP_API_KEY: "${ERP_API_KEY}"
@@ -277,9 +347,9 @@ distribution:
   # 필요 조건: 봇이 이 채널의 멤버여야 함 (스크립트가 자동 join 시도, 실패 시 /invite 안내 반환)
   slack:
     enabled: true
-    channel: "${SLACK_REPORT_CHANNEL:-#agent-log}"
-    include_download_link: true
-    # 다운로드 링크 접두사 (실제 파일 서버 URL 로 설정)
+    channel: "${SLACK_REPORT_CHANNEL:-#oc-agent-log}"
+    include_download_link: false   # md 파일 다운로드 링크는 완료 메시지에서 제외
+    # 다운로드 링크 접두사 (include_download_link: true 로 되돌릴 경우에만 사용)
     download_link_prefix: "https://agent-team.barogo.local/output/"
 
   # Notion 저장 위치 (리서치/분석 BOT DB)

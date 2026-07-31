@@ -38,6 +38,7 @@ from pathlib import Path
 
 _ANSI_RE = re.compile(r"\x1b(?:\[[0-9;]*[mGKHFJ]|\][^\x07]*\x07|[^\[])")
 _VERDICT_RE = re.compile(r"###\s*Verdict:\s*(APPROVE|EDIT|REASSIGN)", re.IGNORECASE)
+_TIMEOUT_MARKER = "###REVIEW_TIMEOUT###"
 
 _EXIT_CODE = {"APPROVE": 0, "EDIT": 2, "REASSIGN": 3}
 
@@ -76,20 +77,28 @@ def build_prompt(reviewer_spec: str, artifact_content: str, artifact_name: str,
 파일을 새로 찾아 읽으려 하지 마세요."""
 
 
-def run_isolated(prompt: str, cli: str, model: str) -> str:
-    """격리된 임시 디렉터리(cwd)에서 리뷰 서브프로세스를 실행하고 stdout 전체를 반환."""
+def run_isolated(prompt: str, cli: str, model: str, timeout_sec: int = 600) -> str:
+    """격리된 임시 디렉터리(cwd)에서 리뷰 서브프로세스를 실행하고 stdout 전체를 반환.
+
+    타임아웃 시 이전엔 TimeoutExpired 가 그대로 전파되어 스크립트 전체가 크래시했다
+    (`.review-verdict.md` 도 못 만들고, exit 1 로 정리되지도 못함). 여기서 잡아서
+    지금까지 나온 부분 출력(있다면)을 살리고 _TIMEOUT_MARKER 로 표시해 반환한다."""
     tmp_dir = tempfile.mkdtemp(prefix="review-artifact-")
     try:
         cmd = [cli, "run", "--dangerously-skip-permissions", "--model", model, prompt]
-        proc = subprocess.run(
-            cmd,
-            cwd=tmp_dir,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=600,
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=tmp_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_sec,
+            )
+        except subprocess.TimeoutExpired as e:
+            partial = (e.stdout or "") + ("\n" + e.stderr if e.stderr else "")
+            return _TIMEOUT_MARKER + "\n" + _strip_ansi(partial)
         return _strip_ansi(proc.stdout + ("\n" + proc.stderr if proc.returncode != 0 else ""))
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -114,6 +123,9 @@ def main() -> int:
         "--model",
         default=os.environ.get("REVIEWER_MODEL") or os.environ.get("AGENT_MODEL", "claude-sonnet-4-6"),
     )
+    parser.add_argument(
+        "--timeout-sec", type=int, default=int(os.environ.get("REVIEWER_TIMEOUT_SEC", "600")),
+    )
     args = parser.parse_args()
 
     artifact_path = Path(args.artifact)
@@ -132,10 +144,17 @@ def main() -> int:
     prompt = build_prompt(reviewer_spec, artifact_content, artifact_path.name, sections,
                           args.task_type, args.task_summary)
 
-    output = run_isolated(prompt, args.cli, model)
+    output = run_isolated(prompt, args.cli, model, timeout_sec=args.timeout_sec)
 
     if args.out:
         Path(args.out).write_text(output, encoding="utf-8")
+
+    if output.startswith(_TIMEOUT_MARKER):
+        print(
+            f'{{"verdict": null, "error": "review_timeout", "timeout_sec": {args.timeout_sec}, '
+            f'"out_saved": {str(bool(args.out)).lower()}}}'
+        )
+        return 1
 
     match = _VERDICT_RE.search(output)
     if not match:

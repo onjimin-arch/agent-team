@@ -10,14 +10,15 @@
 """
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
 import re
+import subprocess
+import sys
 import threading
 import time
-import urllib.error
-import urllib.request
 import uuid
 from pathlib import Path
 
@@ -67,8 +68,23 @@ def _load_new_topic_trigger() -> str:
     except Exception:
         return "새 작업"
 
+
+def _load_task_types() -> list[dict]:
+    """team-config.yaml 의 task.types 를 그대로 읽는다 — 이 봇의 라벨링이 팀장의
+    Phase 1-0 판별과 별개의 하드코딩된 키워드셋으로 드리프트하지 않도록, 여기서
+    별도 목록을 유지하지 않고 항상 이 config 를 단일 소스로 삼는다."""
+    config_path = Path(__file__).parent.parent / ".claude" / "configs" / "team-config.yaml"
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return cfg.get("task", {}).get("types", [])
+    except Exception:
+        return []
+
 NEW_TOPIC_TRIGGER = _load_new_topic_trigger()
+TASK_TYPES = _load_task_types()
 _MENTION_RE = re.compile(r"<@[UW][A-Z0-9]+(\|[^>]+)?>")
+_BRACKET_TAG_RE = re.compile(r"\[([^\[\]]{1,30})\]")
 _SLUG_LINE_RE = re.compile(r"^\s*슬러그\s*[:：]\s*([a-z0-9][a-z0-9\-]*)\s*$", re.IGNORECASE)
 _BARE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,64}$")
 _CANCEL_WAIT_TIMEOUT = 45.0  # 중단 신호 후 스레드 join 대기 최대 초
@@ -119,13 +135,16 @@ def on_message(event, say, client):
         return
 
     # 3. DM 폴백 — 스레드 매칭 실패 시 채널의 마지막 태스크를 후속으로 처리
+    #    업무 키워드가 있을 때만 라우팅 (일반 인사 등은 step 4로 넘겨 필터링)
     if NEW_TOPIC_TRIGGER not in text and text:
-        latest = find_latest_task_for_channel(channel)
-        if latest and latest.get("slug"):
-            _post(client, channel, thread_ts,
-                  text=f"🔁 후속 지시 접수 — `{latest['slug']}` 이어서 처리합니다.")
-            _start_followup_task(latest["slug"], text, channel, thread_ts, user, client)
-            return
+        is_cmd, _ = _is_command(text)
+        if is_cmd:
+            latest = find_latest_task_for_channel(channel)
+            if latest and latest.get("slug"):
+                _post(client, channel, thread_ts,
+                      text=f"🔁 후속 지시 접수 — `{latest['slug']}` 이어서 처리합니다.")
+                _start_followup_task(latest["slug"], text, channel, thread_ts, user, client)
+                return
 
     # 4. 새로운 명령어 처리
     _handle_trigger(event, say, text, channel, thread_ts, user, client)
@@ -213,43 +232,74 @@ def _cancel_and_wait(task_id: str, client, channel: str, thread_ts: str | None, 
 
 # ---------- '신규 주제' 트리거 ----------
 
+def _match_tag_to_type(tag: str, task_types: list[dict]) -> str | None:
+    """대괄호 태그(`[dev]`, `[설계]` 등) 내용을 task.types 의 name 또는 triggers 와 대조한다.
+    CLAUDE.md Phase 1-0 의 "태그가 명시된 경우 → 태그 우선 (score 무시)" 규칙과 동일한 우선순위를
+    Slack 단계에서도 미리 반영 — 별도 별칭 표를 두지 않고 team-config.yaml 자체를 그대로 참조한다."""
+    tag_norm = tag.strip().lower()
+    if not tag_norm:
+        return None
+    for t in task_types:
+        name = str(t.get("name", "")).lower()
+        if tag_norm == name:
+            return t["name"]
+        for trig in t.get("triggers", []):
+            trig_norm = str(trig).lower()
+            if tag_norm == trig_norm or tag_norm in trig_norm or trig_norm in tag_norm:
+                return t["name"]
+    return None
+
+
+def _score_task_types(text_lower: str, task_types: list[dict]) -> list[tuple[str, float]]:
+    """CLAUDE.md Phase 1-0 과 동일한 공식: score = 매칭 keyword 수 / 해당 type 의 전체 trigger 수."""
+    scores = []
+    for t in task_types:
+        triggers = t.get("triggers") or []
+        if not triggers:
+            continue
+        matched = sum(1 for trig in triggers if str(trig).lower() in text_lower)
+        if matched:
+            scores.append((t["name"], matched / len(triggers)))
+    return scores
+
+
 def _is_command(text: str) -> tuple[bool, str]:
     """
-    명령어인지 판별.
-    반환: (명령어여부, 태스크타입: 'research' | 'dev' | 'github-plan' | 'auto')
-    
-    규칙:
-    - '[AUTO:' → auto
-    - '새 작업', '리서치', '보고서', '분석', '시장' → research (research-report)
-    - '개발', '코드', '버그', '수정', '배포', '기능 추가', '리팩토링' → github-plan (선행 오픈소스 리서치 필수)
-    - 그 외 → False (명령어 아님)
+    명령어인지 판별하고, 예상 task type 을 라벨링한다.
+
+    **중요**: 여기서 반환하는 type 은 어디까지나 Slack 안내 메시지용 미리보기다.
+    최종 판별은 opencode 서브프로세스 안에서 팀장이 CLAUDE.md Phase 1-0 로 다시 수행하며,
+    거기서 실제로 참조하는 것도 이 함수와 동일한 team-config.yaml 의 task.types 다 — 그래서
+    이 함수는 별도 키워드셋을 하드코딩하지 않고 항상 TASK_TYPES(같은 config)를 그대로 사용한다.
+    이전 버전은 이 둘이 서로 다른 키워드셋을 써서 라벨과 실제 실행이 어긋날 수 있었다.
+
+    반환: (명령어여부, task.types[].name 중 하나 또는 'auto')
     """
-    text_lower = text.lower()
-    
-    # AUTO 모드 감지
     if '[AUTO:' in text:
         return True, 'auto'
-    
-    # 명시적 키워드 감지 - 반드시 명시적인 키워드가 있어야 함
-    research_keywords = ['새 작업', '새로운 작업', '리서치', '보고서', '분석', '시장', '연구', '조사', '정책', '현황', '조사해', '분석해']
-    
-    # 개발 관련 키워드는 무조건 github-plan 타입으로 분기 (선행 리서치 필수)
-    github_plan_keywords = ['개발', '코드', '버그', '수정', '배포', '기능 추가', '리팩토링', 'pr', '풀리퀘', '개발해', '코드작성', '디버깅', '커스터마이징', '커스텀', '제작', '만들기', '게임', '앱', '웹', '서비스']
-    
-    # 각 키워드 매칭 카운트
-    research_count = sum(1 for kw in research_keywords if kw in text_lower)
-    github_plan_count = sum(1 for kw in github_plan_keywords if kw in text_lower)
-    
-    # 점수가 0 이이면 명령어가 아님
-    if research_count == 0 and github_plan_count == 0:
+
+    task_types = TASK_TYPES
+
+    # 대괄호 태그 우선 (예: "[dev] 로그인 버그 수정")
+    tag_match = _BRACKET_TAG_RE.search(text)
+    if tag_match:
+        matched_type = _match_tag_to_type(tag_match.group(1), task_types)
+        if matched_type:
+            return True, matched_type
+
+    text_lower = text.lower()
+    scores = _score_task_types(text_lower, task_types)
+    if not scores:
         return False, ''
-    
-    # 개발 관련 키워드가 하나라도 매칭되면 무조건 github-plan 으로 (선행 리서치 강제)
-    if github_plan_count > 0:
-        return True, 'github-plan'
-    
-    # 그 외는 research
-    return True, 'research'
+
+    best_score = max(s for _, s in scores)
+    tied = [name for name, s in scores if s == best_score]
+    if len(tied) > 1:
+        # 동점 처리: team-config.yaml 나열 순서 기준 자동 선택
+        # (CLAUDE.md AUTO 모드 인터럽트 규칙 ③과 동일 — Slack 트리거는 항상 AUTO 모드로 실행되므로)
+        order = [t["name"] for t in task_types]
+        tied.sort(key=lambda n: order.index(n) if n in order else len(order))
+    return True, tied[0]
 
 def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, user: str, client) -> None:
     say_kwargs = {"thread_ts": thread_ts} if thread_ts else {}
@@ -274,16 +324,28 @@ def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, 
     slug = slugify(task_desc)
     
     # 타입별 아이콘 및 라벨
+    # team-config.yaml 의 task.types 이름과 1:1 대응 (더 이상 별도 키워드셋을 쓰지 않으므로
+    # _is_command 가 반환할 수 있는 값과 항상 일치한다).
     type_config = {
-        'research': ('📊', '리서치', '기존 오픈소스 분석 없이 진행'),
-        'github-plan': ('🔍', '오픈소스 리서치', '선행 오픈소스 검색 → 분석 → 개발 착수'),
-        'dev': ('💻', '개발', '즉시 개발 착수'),
-        'auto': ('🤖', '오토', '자동 모드')
+        'research-report': ('📊', '리서치·분석 보고서', 'alpha 조사 → gamma 팩트체크 → delta 시각화 → beta 보고서 작성'),
+        'code-review': ('🔎', '코드 리뷰', 'alpha 코드 스캔 → gamma 논리·보안 검증 → beta 리뷰 요약'),
+        'multilingual-brief': ('🌐', '다국어 브리프', 'alpha 조사 → beta 다국어 요약·번역 → delta 시각자료'),
+        'dev': ('💻', '개발', 'eta 오픈소스 선행 리서치 → alpha 구현 방향 분석 → epsilon 코드 수정·검증·배포'),
+        'design': ('🧩', '설계', 'alpha 사전 리서치 → zeta 설계서(design-spec.md) 작성'),
+        'github-plan': ('🔍', '오픈소스 리서치·구현 계획', 'eta 레포 탐색·라이선스 감사 → alpha 방향 분석 → beta 계획 보고서'),
+        'auto': ('🤖', '오토', '자동 모드 — Phase 1~5 중단 없이 실행'),
     }
-    emoji, label, note = type_config.get(task_type, ('❓', '알 수 없음', ''))
-    
+    emoji, label, note = type_config.get(
+        task_type, ('❓', task_type or '알 수 없음', '')
+    )
+
     say(
-        text=f"{emoji} {label} 작업 시작: `{slug}`\n> {task_desc}\n\n📋 **처리 방식**: {note}\n저장 경로: `output/{slug}/`",
+        text=(
+            f"{emoji} {label} 작업 시작: `{slug}`\n> {task_desc}\n\n"
+            f"📋 **예상 처리 방식**: {note}\n"
+            f"_(최종 유형은 팀장이 Phase 1-0에서 다시 판별합니다 — 위 라벨과 다를 수 있어요)_\n"
+            f"저장 경로: `output/{slug}/`"
+        ),
         **say_kwargs,
     )
     _start_new_task(slug, task_desc, channel, thread_ts, user, client)
@@ -390,24 +452,6 @@ def _consume_slug_wait(user: str, text: str, channel: str, client) -> bool:
     return True
 
 
-# ---------- 멤버 산출물 승인 (현재는 UI 전용 — 러너 Event 연결은 별도 단계) ----------
-
-@app.action("approve_yes")
-@app.action("approve_no")
-def on_approval(ack, body, client):
-    ack()
-    approval_id = body["actions"][0]["value"]
-    decision = "approved" if body["actions"][0]["action_id"] == "approve_yes" else "rejected"
-    pending = pop_pending(approval_id)
-    if not pending:
-        return
-    client.chat_update(
-        channel=body["channel"]["id"],
-        ts=body["message"]["ts"],
-        text=f"{'✅ 승인' if decision == 'approved' else '❌ 반려'}: {pending.get('label', '')}",
-        blocks=[],
-    )
-
 
 # ---------- 태스크 시작 ----------
 
@@ -448,7 +492,6 @@ def _spawn_runner(task_id: str, slug: str, task: str, channel: str, thread_ts: s
     t.start()
 
 
-_DEFAULT_WEBHOOK_FILE = Path(r"C:\Users\이지민\.claude-secrets\slack-webhook.txt")
 # `**작성일**: 2026-04-30` (개별 줄) 또는
 # `> **작성일**: 2026-04-24 | **Task Type**: ...` (한 줄 인라인) 둘 다 매칭.
 # 줄 prefix 의 `> ` blockquote 와 ` | ` 구분자를 허용, 라벨 이후 다음 `|` 또는 줄끝까지 캡처.
@@ -516,6 +559,28 @@ def _extract_insights(final_text: str, max_items: int = 5) -> list[str]:
     return items
 
 
+_NOTION_URL_RE = re.compile(r"https://(?:www\.)?notion\.so/\S+|https://app\.notion\.com/\S+")
+
+
+def _extract_notion_url(review_log_path: Path) -> str | None:
+    """review-log.md 에서 가장 최근에 기록된 Notion 페이지 URL을 찾는다.
+
+    CLAUDE.md Phase 5가 Notion 저장에 성공해도, slack-notification.json 을 만드는 시점(예전엔
+    Notion보다 먼저 실행되던 5-1)에 그 URL을 몰라서 Slack 알림에 전혀 안 실리는 문제가 실제로
+    있었다(2026-07-29, 소화물-인증-등록제 워크스페이스). CLAUDE.md 는 순서를 바꿔 고쳤지만, 이
+    bridge 합성 폴백도 review-log.md 를 직접 뒤져 같은 문제를 겪지 않도록 보강한다."""
+    if not review_log_path.exists():
+        return None
+    try:
+        text = review_log_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    matches = _NOTION_URL_RE.findall(text)
+    if not matches:
+        return None
+    return matches[-1].rstrip(").,\"'")
+
+
 def _extract_fact_check_summary(gamma_path: Path) -> str | None:
     if not gamma_path.exists():
         return None
@@ -572,7 +637,7 @@ def _synthesize_block_kit_payload(team_root: Path, slug: str) -> dict | None:
 
     written = _grab_meta(final_text, "작성일") or time.strftime("%Y-%m-%d")
     task_type = _grab_meta(final_text, "Task Type") or "research-report"
-    active = _grab_meta(final_text, "활성 멤버") or "alpha · beta"
+    active = _grab_meta(final_text, "활성 멤버") or "alpha(조사) · beta(보고서)"
     active = re.sub(r"member-", "", active).strip()
     cycle = _grab_meta(final_text, "사이클") or "1 / 3"
     approval = _grab_meta(final_text, "승인") or "human_approval=false (자동 완료)"
@@ -603,6 +668,10 @@ def _synthesize_block_kit_payload(team_root: Path, slug: str) -> dict | None:
     if fact_summary:
         blocks.append({"type": "section", "text": {"type": "mrkdwn",
             "text": f"*팩트체크 결과*\n{fact_summary}"}})
+    notion_url = _extract_notion_url(ws / "review-log.md")
+    if notion_url:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*Notion*: {notion_url}"}})
     blocks.append({"type": "context", "elements": [
         {"type": "mrkdwn", "text": f"로컬 경로: `output/{slug}/final/final-artifact.md` · bridge 자동 합성"}
     ]})
@@ -613,31 +682,33 @@ def _synthesize_block_kit_payload(team_root: Path, slug: str) -> dict | None:
     }
 
 
-def _read_webhook_url() -> str | None:
-    path = Path(os.environ.get("SLACK_WEBHOOK_FILE", str(_DEFAULT_WEBHOOK_FILE)))
-    try:
-        url = path.read_text(encoding="utf-8").strip()
-        return url or None
-    except OSError:
-        return None
+def _ensure_notion_link(payload: dict, ws: Path) -> bool:
+    """이미 존재하는 slack-notification.json 에 Notion 링크가 빠져 있으면 review-log.md 에서
+    찾아 blocks 에 보강한다(payload 를 in-place 로 수정). 보강했으면 True 반환.
 
-
-def _post_to_webhook(payload: dict) -> bool:
-    url = _read_webhook_url()
-    if not url:
+    실사례(2026-07-29, 소화물-인증-등록제): Phase 5가 Notion을 성공시켰는데도
+    slack-notification.json 생성 시점 순서 문제로 링크가 아예 안 실렸고, 파일이 이미 존재하니
+    _synthesize_block_kit_payload 의 보강 로직도 트리거될 기회가 없었다 — 그래서 기존 파일
+    자체를 이 함수로 직접 보강한다."""
+    blocks = payload.get("blocks")
+    if not isinstance(blocks, list):
         return False
-    try:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=body,
-            headers={"Content-Type": "application/json; charset=utf-8"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return 200 <= resp.status < 300
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
-        log.warning("webhook 전송 실패: %s", e)
+    already = any(
+        "notion.so" in json.dumps(b, ensure_ascii=False) or "notion.com" in json.dumps(b, ensure_ascii=False)
+        for b in blocks
+    )
+    if already:
         return False
+    notion_url = _extract_notion_url(ws / "review-log.md")
+    if not notion_url:
+        return False
+    insert_at = len(blocks)
+    for i, b in enumerate(blocks):
+        if b.get("type") == "context":
+            insert_at = i
+            break
+    blocks.insert(insert_at, {"type": "section", "text": {"type": "mrkdwn", "text": f"*Notion*: {notion_url}"}})
+    return True
 
 
 def _load_block_kit_payload(slug: str) -> tuple[dict | None, bool]:
@@ -645,7 +716,13 @@ def _load_block_kit_payload(slug: str) -> tuple[dict | None, bool]:
 
     1) `output/{slug}/slack-notification.json` 이 있으면 그걸 사용 (Phase 5 정상 경로).
     2) 없으면 워크스페이스 산출물에서 합성하고 디스크에 저장(다음 follow-up 재사용).
-    `was_synthesized=True` 면 webhook 도 bridge 가 직접 쏴 줘야 한다(agent 가 Phase 5 를 못 했으므로).
+
+    이전엔 `was_synthesized=True` 인 경우(팀장이 Phase 5 를 스킵/실패한 케이스) 별도의
+    Incoming Webhook("Claude Agent Team" 이름으로 표시)에도 중복 발송했는데, 이 경로는
+    scripts/slack_publish.py 를 통한 정식 Phase 5 배포와 별개로 팀장의 스코프 판단(예: "Phase 1-4까지만
+    수행")을 무시하고 다른 채널·다른 봇 이름으로 알림을 흘려보내 혼란을 줬다 — 제거함.
+    이제 `was_synthesized=True` 는 "Phase 5 가 실행되지 않았다"는 사실을 그대로 기록만 하고,
+    이 스레드 알림 하나로 끝낸다.
     """
     team_root_str = os.environ.get("TEAM_ROOT")
     if not team_root_str:
@@ -655,9 +732,17 @@ def _load_block_kit_payload(slug: str) -> tuple[dict | None, bool]:
 
     if path.exists():
         try:
-            return json.loads(path.read_text(encoding="utf-8")), False
+            payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
             log.warning("slack-notification.json 읽기 실패 (%s): %s — 합성 fallback", slug, e)
+        else:
+            if _ensure_notion_link(payload, path.parent):
+                try:
+                    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                    log.info("slack-notification.json 에 Notion 링크 보강: %s", path)
+                except OSError as e:
+                    log.warning("Notion 링크 보강 저장 실패 (%s): %s", slug, e)
+            return payload, False
 
     payload = _synthesize_block_kit_payload(team_root, slug)
     if not payload:
@@ -676,27 +761,27 @@ def _run_task(task_id: str, slug: str, task: str, channel: str, thread_ts: str |
     def notify(msg: str):
         _post(client, channel, thread_ts, text=msg)
 
-    def request_approval(label: str, preview: dict) -> str:
-        approval_id = uuid.uuid4().hex[:10]
-        put_pending(approval_id, {
-            "kind": "artifact", "label": label, "task_id": task_id,
-            "channel": channel, "thread_ts": thread_ts,
-        })
-        _post(client, channel, thread_ts, blocks=[
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"*승인 요청*: {label}"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"```{preview.get('summary', '')[:600]}```"}},
-            {"type": "actions", "elements": [
-                {"type": "button", "style": "primary", "text": {"type": "plain_text", "text": "승인"}, "action_id": "approve_yes", "value": approval_id},
-                {"type": "button", "style": "danger", "text": {"type": "plain_text", "text": "반려"}, "action_id": "approve_no", "value": approval_id},
-            ]},
-        ], text=f"승인 요청: {label}")
-        return approval_id
+    # 진행 로그(💭 ...)는 스레드에 매번 새 메시지로 쌓지 않고, 메시지 하나를 계속
+    # 갱신한다 — opencode 가 몇 초마다 라인을 쏟아내면 스레드가 도배되는 문제 완화.
+    _progress_ts: list[str | None] = [None]
+
+    def notify_progress(msg: str):
+        if _progress_ts[0] is None:
+            resp = _post(client, channel, thread_ts, text=msg)
+            _progress_ts[0] = resp["ts"]
+            return
+        try:
+            client.chat_update(channel=channel, ts=_progress_ts[0], text=msg)
+        except Exception as e:
+            log.warning("progress 메시지 갱신 실패, 새 메시지로 폴백: %s", e)
+            resp = _post(client, channel, thread_ts, text=msg)
+            _progress_ts[0] = resp["ts"]
 
     try:
         result = run_team_lead(
             slug, task,
             notify=notify,
-            request_approval=request_approval,
+            notify_progress=notify_progress,
             cancel_event=cancel_event,
             follow_up=follow_up,
         )
@@ -733,11 +818,7 @@ def _notify_completion(client, channel: str, thread_ts: str | None, notify, slug
                     kwargs["thread_ts"] = thread_ts
                 client.chat_postMessage(**kwargs)
                 if synthesized:
-                    # Phase 5 가 안 돌아간 케이스 — webhook 채널도 bridge 가 직접 발송
-                    if _post_to_webhook(payload):
-                        notify("📣 webhook 채널에도 동일한 알림을 발송했습니다 (Phase 5 자동 보강).")
-                    else:
-                        notify("⚠️ webhook 채널 발송 실패 — 이 스레드 알림만 게시되었습니다.")
+                    notify("ℹ️ 이번 실행은 Phase 5(배포)를 수행하지 않아, 워크스페이스 산출물에서 알림을 자동 합성했습니다.")
                 if follow_up:
                     notify("🔁 후속 지시 반영 완료 — 위 블록의 수치·멤버 목록이 최신 상태입니다.")
                 return
@@ -748,6 +829,12 @@ def _notify_completion(client, channel: str, thread_ts: str | None, notify, slug
         lines = [f"{header}: `output/{slug}/final/final-artifact.md`"]
     elif status == "cancelled":
         lines = [f"⏹️ 중단됨: `{slug}` — 다음 지시를 기다립니다."]
+    elif status == "failed":
+        rc = result.get("returncode")
+        lines = [
+            f"❌ 실행 실패 — opencode 프로세스가 비정상 종료되었습니다 (exit code {rc}). "
+            f"바로 위 오류 로그를 확인해 주세요. `output/{slug}/` 는 그대로 보존되어 있어 다시 시도할 수 있습니다."
+        ]
     else:
         lines = [f"⚠️ 부분 완료 — 최종 산출물 미생성. `output/{slug}/` 내부 확인 필요."]
 
@@ -758,7 +845,51 @@ def _notify_completion(client, channel: str, thread_ts: str | None, notify, slug
     notify("\n".join(lines))
 
 
+_LOCK_FILE = Path(__file__).parent / "state" / "app.lock"
+
+
+def _pid_alive(pid: int) -> bool:
+    if os.name == "nt":
+        try:
+            out = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            return str(pid) in out.stdout
+        except OSError:
+            return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _acquire_single_instance_lock() -> None:
+    """중복 실행 방지 — 같은 봇 토큰으로 app.py 두 프로세스가 동시에 Socket Mode 에
+    붙으면 이벤트를 어느 쪽이 받을지 불확실해지고, state/*.json 을 서로 다른 프로세스가
+    동시에 읽고 써서 꼬인다(2026-07-29 실사례: 후속 지시에 아무 응답도 없었음).
+    PID 파일로 이미 살아있는 인스턴스가 있으면 즉시 종료하고, 없으면(또는 이전 프로세스가
+    비정상 종료해 PID 파일만 남은 경우) 현재 PID 로 새로 기록한다."""
+    _LOCK_FILE.parent.mkdir(exist_ok=True)
+    if _LOCK_FILE.exists():
+        try:
+            old_pid = int(_LOCK_FILE.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            old_pid = None
+        if old_pid and old_pid != os.getpid() and _pid_alive(old_pid):
+            log.error(
+                "이미 실행 중인 app.py 인스턴스가 있습니다 (PID %d). 중복 실행은 이벤트 중복 "
+                "수신과 state 파일 경합을 유발하므로 시작하지 않습니다. 기존 프로세스를 먼저 "
+                "종료한 뒤 다시 실행하세요.", old_pid,
+            )
+            sys.exit(1)
+    _LOCK_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    atexit.register(lambda: _LOCK_FILE.unlink(missing_ok=True))
+
+
 if __name__ == "__main__":
+    _acquire_single_instance_lock()
     handler = SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
     log.info("slack-bridge starting (Socket Mode)")
     handler.start()

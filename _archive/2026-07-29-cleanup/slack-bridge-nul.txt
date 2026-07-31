@@ -1,0 +1,1 @@
+fatal: path 'output/2026-배달-시장-분석해줘/final/final-artifact.md' exists on disk, but not in 'HEAD'

@@ -92,8 +92,9 @@ TEAM_ROOT=C:/Users/<USERNAME>/OneDrive - 바로고/문서/클로드 코드 에�
 # opencode 모델 (anthropic/ prefix 없어도 자동 변환)
 AGENT_MODEL=claude-sonnet-4-6
 
-# 완료 알림 Webhook URL 파일 경로 (없으면 webhook 발송 생략)
-SLACK_WEBHOOK_FILE=C:/Users/<USERNAME>/.claude-secrets/slack-webhook.txt
+# Phase 5 Slack 배포 채널 — 채널명 대신 채널 ID(C로 시작)를 쓰면 이름 검색을 건너뛴다
+# (채널이 많은 워크스페이스에서는 이름 검색이 탐색 한도 내에 못 찾을 수 있음).
+SLACK_REPORT_CHANNEL=C0XXXXXXX
 ```
 
 ---
@@ -104,7 +105,9 @@ SLACK_WEBHOOK_FILE=C:/Users/<USERNAME>/.claude-secrets/slack-webhook.txt
 python app.py
 ```
 
-또는 Windows 작업 스케줄러 등록 (상위 폴더의 `install-service.ps1` 참고).
+**상시 실행 + 자동 재시작** (권장): `run-forever.ps1`이 app.py 가 종료될 때마다 5초 후 자동으로
+다시 시작합니다(재시도 횟수 제한 없음). 재부팅/로그오프 이후에도 유지하려면 관리자 PowerShell에서
+`register-always-on-task.ps1` 을 한 번 실행해 작업 스케줄러에 등록하세요.
 
 ---
 
@@ -115,18 +118,18 @@ python app.py
 **DM 또는 채널 `@봇` 멘션**:
 
 ```
-신규 주제 2026년 국내 전기차 시장 리서치 후 보고서 작성
-신규 주제 [dev] 로그인 버그 수정 - 토큰 만료 시 재로그인 안 됨
+새 작업 2026년 국내 전기차 시장 리서치 후 보고서 작성
+새 작업 [dev] 로그인 버그 수정 - 토큰 만료 시 재로그인 안 됨
 개발 로그인 버그 수정
 리서치 2026년 퀵커머스 시장 점유율 분석
 ```
 
-- `신규 주제`(또는 `team-config.yaml`의 `execution.workspace.new_topic_trigger`) 키워드가 있으면 새 워크스페이스를 즉시 생성합니다.
+- `새 작업`(`team-config.yaml`의 `execution.workspace.new_topic_trigger` 값 — 기본값이며 실제 설정된 값) 키워드가 있으면 새 워크스페이스를 즉시 생성합니다.
 - 없어도 개발·리서치 관련 키워드가 있으면 자동 감지해 새 작업으로 처리합니다.
 - 슬러그는 업무 설명에서 자동 생성됩니다 (`slug.py` 기반).
 - 인사말은 간단히 응답하고 지시로 처리하지 않습니다.
 
-**완료 알림**: 에이전트가 `output/{slug}/slack-notification.json`을 생성하면 봇이 해당 Block Kit 블록을 DM/스레드에 재포스팅합니다. 파일이 없으면 보고서 내용에서 자동 합성하고, `SLACK_WEBHOOK_FILE`이 설정되어 있으면 Webhook 채널에도 동일 내용을 발송합니다.
+**완료 알림**: 에이전트가 `output/{slug}/slack-notification.json`을 생성하면 봇이 해당 Block Kit 블록을 DM/스레드에 재포스팅합니다. 파일이 없으면(팀장이 Phase 5를 수행하지 않은 경우) 보고서 내용에서 자동 합성해 같은 스레드에 안내 문구와 함께 게시합니다 — 별도 Webhook 이중 발송은 하지 않습니다.
 
 ### 5-2. 스레드·DM 후속 지시
 
@@ -182,7 +185,7 @@ JSON으로 원인과 해결 힌트를 출력하므로, 같은 명령을 직접 �
 cd ..
 python scripts/notion_publish.py --file output/<slug>/final/final-artifact.md \
   --data-source-id 348363ae-08db-80aa-ba4a-000b3160d6ed --title-property 이름
-python scripts/slack_publish.py --channel "#agent-log" --text "테스트"
+python scripts/slack_publish.py --channel "#oc-agent-log" --text "테스트"
 ```
 
 자주 발생하는 실패:

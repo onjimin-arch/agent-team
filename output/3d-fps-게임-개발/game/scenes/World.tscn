@@ -1,0 +1,181 @@
+[gd_scene load_steps=18 format=3 uid="uid://world_scene"]
+
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="1_player"]
+[ext_resource type="Script" path="res://scripts/EnemySpawner.gd" id="2_spawner"]
+[ext_resource type="PackedScene" path="res://scenes/Enemy.tscn" id="3_enemy"]
+[ext_resource type="Script" path="res://scripts/WorldManager.gd" id="4_worldmanager"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_floor"]
+size = Vector3(30, 0.5, 30)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
+size = Vector3(30, 0.5, 30)
+
+[sub_resource type="StandardMaterial3D" id="Mat_floor"]
+albedo_color = Color(0.35, 0.35, 0.35, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ceiling"]
+size = Vector3(30, 0.5, 30)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ceiling"]
+size = Vector3(30, 0.5, 30)
+
+[sub_resource type="StandardMaterial3D" id="Mat_ceiling"]
+albedo_color = Color(0.25, 0.25, 0.3, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall"]
+size = Vector3(0.5, 4, 30)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wall"]
+size = Vector3(0.5, 4, 30)
+
+[sub_resource type="StandardMaterial3D" id="Mat_wall"]
+albedo_color = Color(0.45, 0.4, 0.35, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_cover"]
+size = Vector3(2, 1.5, 0.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cover"]
+size = Vector3(2, 1.5, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="Mat_cover"]
+albedo_color = Color(0.3, 0.5, 0.3, 1)
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_world"]
+agent_radius = 0.5
+agent_height = 2.0
+cell_size = 0.25
+cell_height = 0.25
+
+[node name="World" type="Node3D"]
+script = ExtResource("4_worldmanager")
+
+; ---- Lighting ----
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 15, 0)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="AmbientOmni1" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3, -8)
+light_energy = 0.6
+omni_range = 20.0
+
+[node name="AmbientOmni2" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3, 8)
+light_energy = 0.6
+omni_range = 20.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+; ---- Navigation Region ----
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("NavigationMesh_world")
+
+; ---- Level Geometry ----
+; Floor
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D"]
+
+[node name="FloorMesh" type="MeshInstance3D" parent="NavigationRegion3D/Floor"]
+mesh = SubResource("BoxMesh_floor")
+surface_material_override/0 = SubResource("Mat_floor")
+
+[node name="FloorCollision" type="CollisionShape3D" parent="NavigationRegion3D/Floor"]
+shape = SubResource("BoxShape3D_floor")
+
+; Ceiling
+[node name="Ceiling" type="StaticBody3D" parent="NavigationRegion3D"]
+position = Vector3(0, 4.25, 0)
+
+[node name="CeilingMesh" type="MeshInstance3D" parent="NavigationRegion3D/Ceiling"]
+mesh = SubResource("BoxMesh_ceiling")
+surface_material_override/0 = SubResource("Mat_ceiling")
+
+[node name="CeilingCollision" type="CollisionShape3D" parent="NavigationRegion3D/Ceiling"]
+shape = SubResource("BoxShape3D_ceiling")
+
+; North wall
+[node name="WallNorth" type="StaticBody3D" parent="NavigationRegion3D"]
+position = Vector3(0, 2.0, -15)
+
+[node name="WallNorthMesh" type="MeshInstance3D" parent="NavigationRegion3D/WallNorth"]
+mesh = SubResource("BoxMesh_wall")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="WallNorthCollision" type="CollisionShape3D" parent="NavigationRegion3D/WallNorth"]
+shape = SubResource("BoxShape3D_wall")
+
+; South wall
+[node name="WallSouth" type="StaticBody3D" parent="NavigationRegion3D"]
+position = Vector3(0, 2.0, 15)
+
+[node name="WallSouthMesh" type="MeshInstance3D" parent="NavigationRegion3D/WallSouth"]
+mesh = SubResource("BoxMesh_wall")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="WallSouthCollision" type="CollisionShape3D" parent="NavigationRegion3D/WallSouth"]
+shape = SubResource("BoxShape3D_wall")
+
+; East wall (rotated 90 degrees around Y)
+[node name="WallEast" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 15, 2.0, 0)
+
+[node name="WallEastMesh" type="MeshInstance3D" parent="NavigationRegion3D/WallEast"]
+mesh = SubResource("BoxMesh_wall")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="WallEastCollision" type="CollisionShape3D" parent="NavigationRegion3D/WallEast"]
+shape = SubResource("BoxShape3D_wall")
+
+; West wall
+[node name="WallWest" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -15, 2.0, 0)
+
+[node name="WallWestMesh" type="MeshInstance3D" parent="NavigationRegion3D/WallWest"]
+mesh = SubResource("BoxMesh_wall")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="WallWestCollision" type="CollisionShape3D" parent="NavigationRegion3D/WallWest"]
+shape = SubResource("BoxShape3D_wall")
+
+; Cover objects (low walls / crates for cover)
+[node name="Cover1" type="StaticBody3D" parent="NavigationRegion3D"]
+position = Vector3(-5, 0.75, -5)
+
+[node name="Cover1Mesh" type="MeshInstance3D" parent="NavigationRegion3D/Cover1"]
+mesh = SubResource("BoxMesh_cover")
+surface_material_override/0 = SubResource("Mat_cover")
+
+[node name="Cover1Collision" type="CollisionShape3D" parent="NavigationRegion3D/Cover1"]
+shape = SubResource("BoxShape3D_cover")
+
+[node name="Cover2" type="StaticBody3D" parent="NavigationRegion3D"]
+position = Vector3(5, 0.75, 5)
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 5, 0.75, 5)
+
+[node name="Cover2Mesh" type="MeshInstance3D" parent="NavigationRegion3D/Cover2"]
+mesh = SubResource("BoxMesh_cover")
+surface_material_override/0 = SubResource("Mat_cover")
+
+[node name="Cover2Collision" type="CollisionShape3D" parent="NavigationRegion3D/Cover2"]
+shape = SubResource("BoxShape3D_cover")
+
+[node name="Cover3" type="StaticBody3D" parent="NavigationRegion3D"]
+position = Vector3(0, 0.75, -8)
+
+[node name="Cover3Mesh" type="MeshInstance3D" parent="NavigationRegion3D/Cover3"]
+mesh = SubResource("BoxMesh_cover")
+surface_material_override/0 = SubResource("Mat_cover")
+
+[node name="Cover3Collision" type="CollisionShape3D" parent="NavigationRegion3D/Cover3"]
+shape = SubResource("BoxShape3D_cover")
+
+; ---- Player (spawns at origin) ----
+[node name="Player" parent="." instance=ExtResource("1_player")]
+position = Vector3(0, 1.0, 10)
+
+; ---- Enemy Spawner ----
+[node name="EnemySpawner" type="Node3D" parent="."]
+script = ExtResource("2_spawner")
+enemy_scene = ExtResource("3_enemy")
+spawn_positions = [Vector3(-8, 1.0, -8), Vector3(8, 1.0, -8), Vector3(0, 1.0, -12), Vector3(-10, 1.0, 0), Vector3(10, 1.0, 0)]
