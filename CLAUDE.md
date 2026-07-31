@@ -78,9 +78,12 @@ AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 
 **⑥ human_approval 게이트 (Termination Protocol)**
 자동 승인. 즉시 Phase 5 진입.
-**예외**: 아래 둘 중 하나라도 해당하면 이 규칙을 적용하지 않는다 — Phase 5 중 **Notion(5-1)을 제외한**
-나머지 엔드포인트(Slack 등)는 자동 실행하지 않고 승인 대기 알림만 보낸다. `auto-log.md`에
-"human_approval override — Phase5 보류(Notion 제외)" 기록.
+**예외**: `termination.high_risk_override_enabled: true` 이고 아래 둘 중 하나라도 해당하면 이 규칙을
+적용하지 않는다 — Phase 5 중 **Notion(5-1)을 제외한** 나머지 엔드포인트(Slack 등)는 자동 실행하지 않고
+승인 대기 알림만 보낸다. `auto-log.md`에 "human_approval override — Phase5 보류(Notion 제외)" 기록.
+(`high_risk_override_enabled: false` 인 동안은 이 예외 자체가 꺼져 있으므로 고위험 type/대시보드
+사용 여부와 무관하게 그냥 자동 승인·Phase 5 진행. 사유는 "경영전략실 고위험 task type 특별 처리
+규칙" 3번 참조.)
 - task type 이 `termination.high_risk_task_types`(`ir-relations`/`gr-policy`/`pr-crisis`)에 속함
   ("경영전략실 고위험 task type 특별 처리 규칙" 참조)
 - 이번 사이클에서 `scripts/dashboard_fetch.py`(사내 부서 대시보드)를 실제로 사용함
@@ -217,12 +220,19 @@ member를 자동으로 추가하지 않는다** — human_approval 설정과 무
    beta 가 작성하는 최종 산출물(정책 건의서, 보도자료, IR 설명자료 등)은 상단에 "초안(내부 검토용) — 외부
    제출·배포 전 반드시 사람 승인 필요"를 명시합니다.
 
-3. **human_approval override (Termination Protocol 적용)**
+3. **human_approval override (Termination Protocol 적용)** — `termination.high_risk_override_enabled: false`
+   인 동안은 **이 3번 전체를 적용하지 않습니다** (1·2번 규칙은 계속 적용됨). 이유: 현재 `distribution` 에
+   활성화된 엔드포인트가 Notion(예외 대상)·Slack 뿐인데, override 로 보류되는 Slack 알림 자체에 이미
+   Notion 링크가 포함돼 있어 내용 노출은 막지 못하고 "정식 완료 메시지 포맷"만 늦추는 실효성 없는
+   게이트였기 때문 (2026-07-31 판단, gmail/drive/calendar 등 실제 외부向 엔드포인트가 하나라도
+   `enabled: true` 로 켜지면 이 플래그를 다시 `true` 로 되돌린다). 플래그가 `true` 일 때는 아래 규칙을
+   그대로 적용합니다:
    - **대화형 세션**: 전역 `human_approval` 값과 무관하게 최종 산출물을 제시하고 사람의 승인을 받을 때까지
      Phase 5 진입을 보류합니다 (`human_approval: true` 로 취급).
    - **AUTO 모드**: Phase 1~4(작성·통합)는 기존과 동일하게 자동 진행합니다. 단 **Phase 5 중 Notion(5-1)을
      제외한 나머지(Slack 등)는 자동 실행하지 않습니다** — 대신 Slack으로 "⚠️ 승인 대기 — {slug} 최종본은
-     고위험 문서이므로 검토 후 별도 배포가 필요합니다" 알림(다운로드 링크 포함)만 보내고, `auto-log.md`에
+     고위험 문서이므로 검토 후 별도 배포가 필요합니다" 알림만 보내고(md 다운로드 링크는 포함하지 않음 —
+     `distribution.slack.include_download_link: false` 와 동일하게 처리), `auto-log.md`에
      "human_approval override — Phase5 보류(Notion 제외)" 사유를 기록합니다. 실시간 승인 수신(Slack 반응
      대기 등)은 지원하지 않으므로, Notion 을 제외한 실제 배포는 사람이 워크스페이스를 열어 직접 트리거하는
      수동 절차로 남깁니다.
@@ -243,8 +253,9 @@ task type으로 "전사 손익 조회"를 처리해도, ERP 대시보드 데이�
 1. **판단 시점**: Phase 1 계획 단계에서 alpha에게 `dept-dashboard-reader` 스킬 사용(대시보드 조회)을
    assignment로 배정했다면, `plan.md`에 "고위험(사내 대시보드 데이터 사용)" 플래그를 기록합니다.
 2. **적용 방식**: 위 "경영전략실 고위험 task type 특별 처리 규칙"의 3번(human_approval override)과
-   완전히 동일하게 처리합니다 — 대화형 세션은 승인 대기, AUTO 모드는 Notion(5-1)을 제외한 Phase 5만
-   보류하고 Slack 알림. **Notion 저장(5-1) 예외도 동일하게 적용됩니다** — 대시보드 사용으로 override 가
+   완전히 동일하게 처리합니다 (그 3번과 동일하게 `termination.high_risk_override_enabled: false` 인 동안은
+   이 승인 override 도 적용하지 않습니다) — 대화형 세션은 승인 대기, AUTO 모드는 Notion(5-1)을 제외한
+   Phase 5만 보류하고 Slack 알림. **Notion 저장(5-1) 예외도 동일하게 적용됩니다** — 대시보드 사용으로 override 가
    걸려도 Notion 저장은 보류하지 않고 항상 실행합니다.
 3. **범위**: 현재는 `dept-dashboard-reader`(사내 부서 대시보드)에만 적용됩니다. `dept-notion-reader`
    (다른 부서 Notion)는 별도 요청이 없는 한 이 규칙 대상이 아닙니다 — 필요해지면 사용자에게 확인 후
@@ -325,7 +336,7 @@ exit code: `APPROVE`=0, `EDIT`=2, `REASSIGN`=3, 파싱 실패=1 (파싱 실패 �
 **방법 B (대안 — Bash 서브프로세스 실행이 불가능한 대화형 Claude Code 세션이고, `Agent` 도구에
 `member-reviewer` 라는 subagent_type 이 별도 등록되어 있지 않을 때)**
 `Agent` 도구를 `subagent_type: "general-purpose"` 로 호출하되, 프롬프트에는
-`.claude/agents/member-reviewer/AGENT.md` 전문 + 리뷰 대상 산출물 + spec + task 요약만 포함시킨다.
+`.claude/agents/member-reviewer(검수)/AGENT.md` 전문 + 리뷰 대상 산출물 + spec + task 요약만 포함시킨다.
 Agent 도구는 이름에 관계없이 항상 새 컨텍스트로 콜드스타트하므로, 팀장의 대화 맥락(지시사항 원문,
 plan.md 작성 경위, 다른 멤버 산출물)은 자동으로 격리된다.
 
@@ -363,7 +374,10 @@ Record results (3-0 검증 결과 + 3-1 판정 원문 요약) in `WS/review-log.
 Apply termination rules in order:
 1. `max_cycles`
 2. `quality_criteria`
-3. `human_approval` — 아래 중 하나라도 해당하면 전역 값과 무관하게 `true` 로 취급한다:
+3. `human_approval` — `termination.high_risk_override_enabled: true` 이고 아래 중 하나라도 해당하면
+   전역 값과 무관하게 `true` 로 취급한다 (`high_risk_override_enabled: false` 인 동안은 이 override
+   전체가 꺼져 있으므로 전역 `human_approval` 값을 그대로 따른다 — 사유는 "경영전략실 고위험 task type
+   특별 처리 규칙" 3번 참조):
    - task type 이 `termination.high_risk_task_types` 에 속함 ("경영전략실 고위험 task type 특별 처리 규칙" 참조)
    - `termination.high_risk_if_dashboard_used: true` 이고 이번 사이클에서 `scripts/dashboard_fetch.py`
      (사내 부서 대시보드)를 실제로 사용함 ("사내 대시보드 데이터 사용 시 승인 규칙" 참조)

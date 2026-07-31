@@ -268,6 +268,12 @@ termination:
   # 데이터(재무·인사 등)가 포함된 산출물은 task type 분류와 무관하게 항상 사람 승인을 거치도록
   # 하기 위함. 처리 로직은 CLAUDE.md "사내 대시보드 데이터 사용 시 승인 규칙" 참조.
   high_risk_if_dashboard_used: true
+  # 위 두 조건(high_risk_task_types / high_risk_if_dashboard_used)이 실제로 Phase 5 를 보류시킬지
+  # 여부의 마스터 스위치. 현재 false 인 이유: distribution 에 켜진 엔드포인트가 Notion(override 예외)·
+  # Slack 뿐인데, override 로 보류되는 Slack 알림 자체에 이미 Notion 링크가 포함돼 있어 내용 노출은
+  # 못 막고 "정식 완료 메시지 포맷"만 늦추는 실효성 없는 게이트였음 (2026-07-31 판단). gmail/drive/
+  # calendar 등 진짜 외부向 엔드포인트가 하나라도 enabled: true 가 되면 다시 true 로 되돌릴 것.
+  high_risk_override_enabled: false
 
 execution:
   dependency_strategy: "lead_decides"
