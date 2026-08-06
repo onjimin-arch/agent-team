@@ -1,0 +1,47 @@
+{
+  "text": "완료: 현장 지역담당자 영업활동 분석 결과가 준비되었습니다.",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "완료: 현장 지역담당자 영업활동 분석"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "현장 대시보드 최근 누적 기준 상위 5개 권역이 전체 활동의 `63.5%`를 차지했습니다. `경기`는 최대 볼륨 유지형, `서울`은 고B2B 관리형, `대구·광주`는 전환 개선 우선 권역으로 정리했습니다."
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Task Type*\nresearch-report"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*사이클*\n1 / 3"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*최대 권역*\n경기 `24.5%`"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*핵심 한계*\n전월 전국 비교 `502 timeout`"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Notion*: https://app.notion.com/p/2026-08-05-3b3363ae08db815f9dfbe2e2cc6904d4"
+      }
+    }
+  ]
+}

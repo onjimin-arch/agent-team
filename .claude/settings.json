@@ -22,7 +22,8 @@
       "mcp__claude_ai_Notion__notion-create-pages",
       "Read(//c/Users/jmlee/OneDrive - 바로고/문서/클로드 코드 에이전트/barogo-agent/**)",
       "Read(//c/Users/jmlee/OneDrive - 바로고/문서/클로드 코드 에이전트/ax-management-system/**)",
-      "Read(//c/Users/jmlee/OneDrive - 바로고/문서/클로드 코드 에이전트/ax-management-system/app/**)"
+      "Read(//c/Users/jmlee/OneDrive - 바로고/문서/클로드 코드 에이전트/ax-management-system/app/**)",
+      "Edit(/.claude/skills/sql-reader/**)"
     ]
   }
 }

@@ -37,6 +37,7 @@ from state import (
     get_task_thread,
     pop_pending,
     pop_slug_wait,
+    put_approval_answer,
     put_pending,
     put_slug_wait,
     put_task,
@@ -81,13 +82,49 @@ def _load_task_types() -> list[dict]:
     except Exception:
         return []
 
+def _load_quick_query_triggers() -> list[str]:
+    """team-config.yaml 의 task.quick_query.triggers — '새 작업' 없이도 이 메시지에 반응할지를
+    싸게 1차 필터링하는 용도다. quick_query 인지 풀 리포트(task.types)인지의 최종 판단은 opencode
+    안에서 팀장이 CLAUDE.md Phase 0 로 내린다 — 이 목록은 어디까지나 "무시하지 않고 실행은 한다"
+    수준의 프리필터다."""
+    config_path = Path(__file__).parent.parent / ".claude" / "configs" / "team-config.yaml"
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        qq = cfg.get("task", {}).get("quick_query", {})
+        if not qq.get("enabled", False):
+            return []
+        return [str(t) for t in qq.get("triggers", [])]
+    except Exception:
+        return []
+
+
+def _load_include_download_link() -> bool:
+    """team-config.yaml 의 distribution.slack.include_download_link — 기본 False(다운로드 링크
+    제외). Team Lead(LLM)가 slack-notification.json 에 이 규칙을 무시하고 다운로드 링크를 반복해서
+    넣는 사례가 여러 워크스페이스에서 확인돼(예: output/이번-전사-경영-실적-손익,
+    output/배달대행사-pg사-이슈 등), 텍스트 지시만으로는 신뢰할 수 없어 봇 쪽에서 최종 발송 직전에
+    결정론적으로 한 번 더 걸러낸다(아래 _strip_download_link_blocks)."""
+    config_path = Path(__file__).parent.parent / ".claude" / "configs" / "team-config.yaml"
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return bool(cfg.get("distribution", {}).get("slack", {}).get("include_download_link", False))
+    except Exception:
+        return False
+
+
 NEW_TOPIC_TRIGGER = _load_new_topic_trigger()
 TASK_TYPES = _load_task_types()
+QUICK_QUERY_TRIGGERS = _load_quick_query_triggers()
+INCLUDE_DOWNLOAD_LINK = _load_include_download_link()
+_DOWNLOAD_LINK_LABEL_RE = re.compile(r"다운로드|download", re.IGNORECASE)
 _MENTION_RE = re.compile(r"<@[UW][A-Z0-9]+(\|[^>]+)?>")
 _BRACKET_TAG_RE = re.compile(r"\[([^\[\]]{1,30})\]")
 _SLUG_LINE_RE = re.compile(r"^\s*슬러그\s*[:：]\s*([a-z0-9][a-z0-9\-]*)\s*$", re.IGNORECASE)
 _BARE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,64}$")
 _CANCEL_WAIT_TIMEOUT = 45.0  # 중단 신호 후 스레드 join 대기 최대 초
+_FOLLOWUP_GUESS_WINDOW_SEC = 900  # 15분 — 이보다 오래된 마지막 작업은 후속 확인 대상에서 제외
 
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 
@@ -134,20 +171,33 @@ def on_message(event, say, client):
     if _route_thread_followup(event, client, text, channel, thread_ts, user):
         return
 
-    # 3. DM 폴백 — 스레드 매칭 실패 시 채널의 마지막 태스크를 후속으로 처리
-    #    업무 키워드가 있을 때만 라우팅 (일반 인사 등은 step 4로 넘겨 필터링)
+    # 3. DM 폴백 — 스레드 매칭 실패 시, 최근 작업이 있으면 후속인지 새 작업인지 "묻는다"
+    #    (추측하지 않는다). "마켓 인텔리전스 알려줘" 다음 "ERP 손익 분석해서 알려줘"처럼 짧은
+    #    시간 안에 서로 무관한 요청을 연달아 보내는데, 뒤 문장에 "분석"처럼 task.types 트리거
+    #    키워드가 우연히 겹치면 조용히 앞 작업의 후속으로 이어붙는 오작동이 실사용에서 반복
+    #    확인됐다(quick-query는 이미 제외했지만 report-type 키워드 겹침까진 못 막았다). 이제는
+    #    같은 채널에 "최근"(아래 윈도우 이내) 작업이 있을 때만 버튼으로 직접 확인한다 — 오래된
+    #    작업이면 애초에 후보에서 제외하고 그냥 새 작업으로 시작한다(질문 피로 최소화).
     if NEW_TOPIC_TRIGGER not in text and text:
-        is_cmd, _ = _is_command(text)
-        if is_cmd:
+        is_cmd, matched_type = _is_command(text)
+        if is_cmd and matched_type != "quick-query":
             latest = find_latest_task_for_channel(channel)
             if latest and latest.get("slug"):
-                _post(client, channel, thread_ts,
-                      text=f"🔁 후속 지시 접수 — `{latest['slug']}` 이어서 처리합니다.")
-                _start_followup_task(latest["slug"], text, channel, thread_ts, user, client)
-                return
+                age_sec = time.time() - latest.get("created_at", 0)
+                if age_sec <= _FOLLOWUP_GUESS_WINDOW_SEC:
+                    approval_id = uuid.uuid4().hex[:10]
+                    put_pending(approval_id, {
+                        "kind": "followup_confirm",
+                        "slug": latest["slug"], "task": text, "user": user,
+                        "channel": channel, "thread_ts": thread_ts,
+                    })
+                    _post(client, channel, thread_ts,
+                          blocks=_followup_confirm_blocks(approval_id, latest["slug"], text),
+                          text=f"직전 작업(`{latest['slug']}`)에 이어서 처리할까요, 새 작업으로 시작할까요?")
+                    return
 
     # 4. 새로운 명령어 처리
-    _handle_trigger(event, say, text, channel, thread_ts, user, client)
+    _handle_trigger(text, channel, thread_ts, user, client)
 
 
 @app.event("app_mention")
@@ -166,7 +216,7 @@ def on_app_mention(event, say, client):
     if _route_thread_followup(event, client, text, channel, thread_ts, user):
         return
 
-    _handle_trigger(event, say, text, channel, thread_ts, user, client)
+    _handle_trigger(text, channel, thread_ts, user, client)
 
 
 # ---------- 라우팅 헬퍼 ----------
@@ -290,6 +340,12 @@ def _is_command(text: str) -> tuple[bool, str]:
     text_lower = text.lower()
     scores = _score_task_types(text_lower, task_types)
     if not scores:
+        # task.types 어느 것도 안 걸리면 quick_query 프리필터로 한 번 더 본다 — "ERP 이번달 손익
+        # 얼마야?" 처럼 조회성 문장은 report_signal_triggers(분석/보고서/리서치 등)가 없어 원래
+        # task.types 에 안 걸린다. 여기서 True 로 반환해도 실제로 quick_query 로 처리할지 풀
+        # 파이프라인이 필요한지는 opencode 안 팀장이 CLAUDE.md Phase 0 에서 최종 판단한다.
+        if any(trig.lower() in text_lower for trig in QUICK_QUERY_TRIGGERS):
+            return True, 'quick-query'
         return False, ''
 
     best_score = max(s for _, s in scores)
@@ -301,9 +357,12 @@ def _is_command(text: str) -> tuple[bool, str]:
         tied.sort(key=lambda n: order.index(n) if n in order else len(order))
     return True, tied[0]
 
-def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, user: str, client) -> None:
-    say_kwargs = {"thread_ts": thread_ts} if thread_ts else {}
+def _handle_trigger(text: str, channel: str, thread_ts: str | None, user: str, client) -> None:
+    """새 작업(또는 명령어로 인식된 메시지)을 새 워크스페이스로 시작한다.
 
+    `event`/`say`(Bolt 콜백) 를 받지 않는다 — 함수 내부는 `channel`/`thread_ts`/`client`만으로
+    충분하고(`_post` 헬퍼로 대체), 이렇게 해야 on_message/on_app_mention 뿐 아니라 버튼 클릭
+    핸들러(on_followup_new)에서도 동일하게 재사용할 수 있다."""
     has_trigger = NEW_TOPIC_TRIGGER in text
     if has_trigger:
         task_desc = text.replace(NEW_TOPIC_TRIGGER, "", 1).strip(" -:·")
@@ -314,11 +373,11 @@ def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, 
 
     # 업무 키워드가 없는 일반 대화는 작업 시작하지 않음
     if not has_trigger and not is_cmd:
-        say("안녕하세요! 업무 요청을 입력해 주세요.\n예) `2026년 배달 시장 분석해줘`", **say_kwargs)
+        _post(client, channel, thread_ts, text="안녕하세요! 업무 요청을 입력해 주세요.\n예) `2026년 배달 시장 분석해줘`")
         return
 
     if not task_desc:
-        say("업무 내용을 입력해 주세요. 예) `바로고 배달 시장 분석해줘`", **say_kwargs)
+        _post(client, channel, thread_ts, text="업무 내용을 입력해 주세요. 예) `바로고 배달 시장 분석해줘`")
         return
 
     slug = slugify(task_desc)
@@ -333,22 +392,67 @@ def _handle_trigger(event, say, text: str, channel: str, thread_ts: str | None, 
         'dev': ('💻', '개발', 'eta 오픈소스 선행 리서치 → alpha 구현 방향 분석 → epsilon 코드 수정·검증·배포'),
         'design': ('🧩', '설계', 'alpha 사전 리서치 → zeta 설계서(design-spec.md) 작성'),
         'github-plan': ('🔍', '오픈소스 리서치·구현 계획', 'eta 레포 탐색·라이선스 감사 → alpha 방향 분석 → beta 계획 보고서'),
+        'quick-query': ('🔍', '빠른 조회', 'Team Lead가 연동 데이터소스를 직접 조회해 즉시 답변 (풀 파이프라인 생략)'),
         'auto': ('🤖', '오토', '자동 모드 — Phase 1~5 중단 없이 실행'),
     }
     emoji, label, note = type_config.get(
         task_type, ('❓', task_type or '알 수 없음', '')
     )
 
-    say(
+    _post(
+        client, channel, thread_ts,
         text=(
             f"{emoji} {label} 작업 시작: `{slug}`\n> {task_desc}\n\n"
             f"📋 **예상 처리 방식**: {note}\n"
             f"_(최종 유형은 팀장이 Phase 1-0에서 다시 판별합니다 — 위 라벨과 다를 수 있어요)_\n"
             f"저장 경로: `output/{slug}/`"
         ),
-        **say_kwargs,
     )
     _start_new_task(slug, task_desc, channel, thread_ts, user, client)
+
+
+def _followup_confirm_blocks(approval_id: str, slug: str, task: str) -> list[dict]:
+    return [
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": f"직전 작업(`{slug}`)과 이어지는 내용인지 확실치 않습니다.\n> {task}"}},
+        {
+            "type": "actions",
+            "block_id": f"followup_confirm:{approval_id}",
+            "elements": [
+                {"type": "button", "style": "primary", "text": {"type": "plain_text", "text": "이어서 처리"}, "action_id": "followup_continue", "value": approval_id},
+                {"type": "button", "text": {"type": "plain_text", "text": "새 작업으로 시작"}, "action_id": "followup_new", "value": approval_id},
+            ],
+        },
+    ]
+
+
+@app.action("followup_continue")
+def on_followup_continue(ack, body, client):
+    ack()
+    approval_id = body["actions"][0]["value"]
+    pending = pop_pending(approval_id)
+    if not pending:
+        return
+    slug, task, channel, user = pending["slug"], pending["task"], pending["channel"], pending["user"]
+    thread_ts = pending.get("thread_ts")
+    text = f"🔁 후속 지시로 처리: `{slug}`\n> {task}"
+    client.chat_update(channel=body["channel"]["id"], ts=body["message"]["ts"], text=text,
+                        blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": text}}])
+    _start_followup_task(slug, task, channel, thread_ts, user, client)
+
+
+@app.action("followup_new")
+def on_followup_new(ack, body, client):
+    ack()
+    approval_id = body["actions"][0]["value"]
+    pending = pop_pending(approval_id)
+    if not pending:
+        return
+    task, channel, user = pending["task"], pending["channel"], pending["user"]
+    thread_ts = pending.get("thread_ts")
+    client.chat_update(channel=body["channel"]["id"], ts=body["message"]["ts"], text="🆕 새 작업으로 시작합니다.",
+                        blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": "🆕 새 작업으로 시작합니다."}}])
+    _handle_trigger(task, channel, thread_ts, user, client)
 
 
 def _slug_confirm_blocks(approval_id: str, slug: str, task: str) -> list[dict]:
@@ -414,6 +518,40 @@ def on_slug_cancel(ack, body, client):
     ack()
     pop_pending(body["actions"][0]["value"])
     client.chat_update(channel=body["channel"]["id"], ts=body["message"]["ts"], text="❌ 취소됨", blocks=[])
+
+
+@app.action("interactive_approval")
+def on_interactive_approval(ack, body, client):
+    """scripts/slack_approval.py 가 게시한 승인/질문 버튼 클릭 처리.
+
+    value 형식: "{approval_id}:{선택지}". 클릭 결과는 state.put_approval_answer 로
+    interactive-approvals.json 에 기록되고, opencode 서브프로세스에서 실행 중인
+    scripts/slack_approval.py 가 그 파일을 폴링해 응답을 이어받는다 — 이 핸들러와 그 스크립트는
+    서로 다른 프로세스이므로 파일이 유일한 연결고리다."""
+    ack()
+    value = body["actions"][0]["value"]
+    if ":" not in value:
+        return
+    approval_id, choice = value.split(":", 1)
+    user = body.get("user", {}).get("id", "")
+    channel_id = body["channel"]["id"]
+    message_ts = body["message"]["ts"]
+
+    recorded = put_approval_answer(approval_id, choice, user)
+    if not recorded:
+        # 이미 다른 클릭으로 응답됨 — 중복 클릭 무시, 현재 상태만 안내.
+        client.chat_postEphemeral(
+            channel=channel_id, user=user,
+            text="이미 다른 응답으로 처리된 요청입니다.",
+        )
+        return
+
+    original_blocks = body["message"].get("blocks", [])
+    kept = [b for b in original_blocks if b.get("type") != "actions"]
+    kept.append({"type": "context", "elements": [
+        {"type": "mrkdwn", "text": f"✅ 선택됨: *{choice}* (by <@{user}>)"}
+    ]})
+    client.chat_update(channel=channel_id, ts=message_ts, text=f"✅ 선택됨: {choice}", blocks=kept)
 
 
 def _consume_slug_wait(user: str, text: str, channel: str, client) -> bool:
@@ -711,6 +849,29 @@ def _ensure_notion_link(payload: dict, ws: Path) -> bool:
     return True
 
 
+def _is_download_link_block(block: dict) -> bool:
+    """"다운로드/Download" 라벨과 최종 산출물 링크(final-artifact.md)가 함께 있는 블록만 정확히
+    매칭한다 — "Markdown 다운로드 기능" 처럼 본문 내용상 무관하게 "다운로드"를 언급하는 블록까지
+    같이 지우지 않기 위해 두 조건을 함께 요구한다."""
+    text = json.dumps(block, ensure_ascii=False)
+    return bool(_DOWNLOAD_LINK_LABEL_RE.search(text)) and "final-artifact.md" in text
+
+
+def _strip_download_link_blocks(payload: dict) -> bool:
+    """`distribution.slack.include_download_link: false`(기본값)면 다운로드 링크 블록을 제거한다.
+    제거했으면 True 반환."""
+    if INCLUDE_DOWNLOAD_LINK:
+        return False
+    blocks = payload.get("blocks")
+    if not isinstance(blocks, list):
+        return False
+    filtered = [b for b in blocks if not _is_download_link_block(b)]
+    if len(filtered) == len(blocks):
+        return False
+    payload["blocks"] = filtered
+    return True
+
+
 def _load_block_kit_payload(slug: str) -> tuple[dict | None, bool]:
     """Block Kit payload 확보. Returns (payload, was_synthesized).
 
@@ -736,17 +897,21 @@ def _load_block_kit_payload(slug: str) -> tuple[dict | None, bool]:
         except (json.JSONDecodeError, OSError) as e:
             log.warning("slack-notification.json 읽기 실패 (%s): %s — 합성 fallback", slug, e)
         else:
-            if _ensure_notion_link(payload, path.parent):
+            notion_added = _ensure_notion_link(payload, path.parent)
+            link_stripped = _strip_download_link_blocks(payload)
+            if notion_added or link_stripped:
                 try:
                     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-                    log.info("slack-notification.json 에 Notion 링크 보강: %s", path)
+                    log.info("slack-notification.json 보강 저장 (%s): notion=%s, download_link_stripped=%s",
+                              slug, notion_added, link_stripped)
                 except OSError as e:
-                    log.warning("Notion 링크 보강 저장 실패 (%s): %s", slug, e)
+                    log.warning("slack-notification.json 보강 저장 실패 (%s): %s", slug, e)
             return payload, False
 
     payload = _synthesize_block_kit_payload(team_root, slug)
     if not payload:
         return None, False
+    _strip_download_link_blocks(payload)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -805,7 +970,11 @@ def _notify_completion(client, channel: str, thread_ts: str | None, notify, slug
     final = result.get("final_path")
     follow_up = result.get("follow_up", False)
 
-    if status == "completed" and final:
+    if status == "completed":
+        # `final`(final-artifact.md)이 없어도 quick-query 완료일 수 있다 — 그 경로는
+        # slack-notification.json 만 쓰고 final-artifact.md 는 만들지 않는다(풀 파이프라인 생략).
+        # `_load_block_kit_payload` 는 final_path 유무와 무관하게 slack-notification.json 존재
+        # 여부만으로 동작하므로 이 조건 완화만으로 충분하다.
         payload, synthesized = _load_block_kit_payload(slug)
         if payload and payload.get("blocks"):
             try:

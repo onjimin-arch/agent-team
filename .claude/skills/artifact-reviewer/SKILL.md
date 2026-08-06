@@ -17,3 +17,6 @@ Check:
 - Required sections
 - Expected format
 - Metadata presence
+- Confidence signaling: statistics/dates/financial figures carry an explicit confidence marker
+  (확인됨 / 추정 / 확인 필요), and gaps in the source were not silently filled with outside
+  background knowledge

@@ -19,6 +19,9 @@ _PENDING = _STATE_DIR / "pending.json"
 _TASKS = _STATE_DIR / "tasks.json"
 _THREADS = _STATE_DIR / "threads.json"  # {f"{channel}:{thread_ts}": task_id}
 _DM_SLUG_WAIT = _STATE_DIR / "dm-slug-wait.json"  # {user_id: {task, channel, thread_ts}}
+# scripts/slack_approval.py 가 동일 경로/스키마를 자체적으로(이 모듈을 import 하지 않고) 폴링한다 —
+# 이 파일을 옮기거나 스키마를 바꾸면 그 스크립트의 _STATE_FILE 상수도 함께 맞춰야 한다.
+_APPROVALS = _STATE_DIR / "interactive-approvals.json"
 
 _cancel_events: dict[str, threading.Event] = {}
 _task_threads: dict[str, threading.Thread] = {}
@@ -146,6 +149,25 @@ def pop_slug_wait(user_id: str) -> dict[str, Any] | None:
 
 def get_slug_wait(user_id: str) -> dict[str, Any] | None:
     return _load(_DM_SLUG_WAIT).get(user_id)
+
+
+# ---------- 인터랙티브 승인 (scripts/slack_approval.py 와 파일 공유) ----------
+
+def put_approval_answer(approval_id: str, choice: str, user: str) -> bool:
+    """버튼 클릭 응답을 기록. 이미 응답된 approval_id면 덮어쓰지 않고 False 반환(중복 클릭 방지)."""
+    data = _load(_APPROVALS)
+    if data.get(approval_id, {}).get("status") == "answered":
+        return False
+    data[approval_id] = {
+        "status": "answered", "choice": choice, "user": user,
+        "answered_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    _save(_APPROVALS, data)
+    return True
+
+
+def get_approval_answer(approval_id: str) -> dict[str, Any] | None:
+    return _load(_APPROVALS).get(approval_id)
 
 
 # ---------- DM 마지막 태스크 조회 ----------

@@ -88,6 +88,14 @@ Team Lead가 **다른 부서의 Notion 워크스페이스 또는 사내 부서�
   gamma 산출물이 존재하지 않으면 Team Lead에 에스컬레이션하고 대기한다.
 - 역할: 수집된 원문 데이터의 **분석·종합·인사이트 도출** 전담.
 
+### 품질 기준 (분석 깊이 — beta·최종 보고서 품질의 원천)
+beta는 이 산출물만을 근거로 "핵심 인사이트"를 작성한다:
+- **분석 결과**: 최소 3개 이상의 구체적 finding을 소제목 또는 bullet으로 구분해 작성한다. 각 finding은
+  gamma가 수집한 원문 데이터(수치·날짜·출처)를 최소 1개 이상 직접 인용하고, 그 데이터가 "무엇을
+  의미하는지"(so-what)를 한 문장 이상 덧붙인다 — 원문 데이터를 나열만 하고 해석을 생략하지 않는다.
+- **결론**: finding들을 종합한 판단을 명시한다. 근거가 부족해 단정할 수 없는 부분은 "현재 근거로는
+  A/B 시나리오 모두 가능하며 X 데이터가 추가로 필요하다"처럼 불확실성의 종류를 구체적으로 명시한다.
+
 ## Revision Protocol
 - If you receive a revision instruction, update the existing artifact.
 - Preserve the original artifact structure while applying the requested changes.

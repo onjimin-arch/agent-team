@@ -1,0 +1,15 @@
+#!/bin/sh
+# 저장소에 커밋된(버전 관리되는) Git pre-commit 훅.
+# .git/hooks/ 는 버전 관리되지 않으므로, 클론마다 최초 1회 아래 명령으로 활성화해야 한다:
+#   git config core.hooksPath scripts/git-hooks
+# (README.md "0. Git Pre-commit Hook 활성화" / CLAUDE.md "Deterministic Tools" 참조)
+#
+# 의도적으로 한쪽만 커밋해야 하는 예외 상황이면 git 기본 우회 기능을 쓴다:
+#   git commit --no-verify
+
+PYTHON="python"
+command -v "$PYTHON" >/dev/null 2>&1 || PYTHON="python3"
+
+"$PYTHON" scripts/check_dashboard_registry_sync.py || exit 1
+"$PYTHON" scripts/check_task_ownership_sync.py
+exit 0

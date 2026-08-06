@@ -28,17 +28,19 @@ python scripts/dashboard_fetch.py \
 ## 대시보드 레지스트리
 새 부서 대시보드의 스펙(base URL·인증 방식·엔드포인트)을 받으면 **이 표에 행을 추가**하고
 `team-config.yaml`의 `external_data_sources.dashboards`에 `enabled: true` 항목을 추가한다.
-스크립트 코드는 수정할 필요 없다.
+스크립트 코드는 수정할 필요 없다. `담당(owner)`/`최종 확인일(last_verified)`은 이 대시보드의
+스펙을 확인해 준 부서 담당자(문의처)와 그 시점을 기록한다 — Phase 6-1이 90일 이상 지난 항목을
+재확인 대상으로 플래그하는 데 쓰인다.
 
-| 대시보드 | 상태 | base_url | key_env | 엔드포인트 | 민감도/주의사항 |
-|---|---|---|---|---|---|
-| ERP (손익/실적) | ✅ 사용 가능 | `http://10.10.190.25:8000` | `ERP_API_KEY` | `api/external/board`(전사 손익, `ym` 파라미터), `api/external/b2b`(B2B 실손익), `api/external/loadshop`(로드샵 실손익), `api/external/input`(수익상세 입력폼, 가장 상세·복잡) | 전사 손익·조직별 마진 등 민감 재무 데이터. Phase 5 외부 배포 전 Team Lead가 민감도 재확인 |
-| AX | ✅ 사용 가능 | `https://10.10.70.81:8011` (자가서명 인증서 — `--ca-cert certs/ax_server.pem` 필수) | `AX_API_KEY` | `api/v1/export/cases`(AX 사례 데이터), `api/v1/export/reports`(부서 보고서/KPI 스냅샷). 공통 선택 파라미터 `dept`(부서 ID — **한글 부서명**, 예: `채널비즈니스팀`. `finance` 같은 영문 코드 아님) | 키는 scope(`cases`/`reports`)별 권한 분리 — 해당 scope 없으면 403. reports에는 부서 보고서 본문(HTML)이 포함될 수 있음, 외부 배포 전 내용 확인 |
-| 현장 | ⏳ 스펙 확인 필요 | - | - | - | - |
-| 인사 | ⏳ 스펙 확인 필요 | - | - | - | 개인정보(급여·평가 등) 포함 가능성이 높음 — 스펙 확인 시 접근 범위·마스킹 필요 여부를 반드시 함께 확인 |
-| 마켓 인텔리전스 | ✅ 사용 가능 | `https://barogo-intel.vercel.app` | `MARKET_API_KEY` | `api/report`(주차 리포트 본문, `week` 필수 예: `2026-W30`, `locale` 선택 `global`/`kr`/`tech`), `api/archive/search`(아카이브 검색, `weekFrom`/`weekTo`/`company`/`keyword`/`q`/`locale` 모두 선택), `api/keywords`(키워드 목록, `locale` 선택) | 공개 Vercel 호스팅 — **현재 서버측 인증 미구현**(누구나 접근 가능). 추후 X-API-Key 추가 예정이며 우리는 이미 헤더를 보내므로 그때 가서 클라이언트 변경 불필요. 인증서는 표준 CA 발급이라 `--ca-cert` 불필요 |
-| 브랜드 | ⏳ 스펙 확인 필요 | - | - | - | - |
-| 법무 | ⏳ 스펙 확인 필요 | - | - | - | 소송·계약 등 기밀 정보 포함 가능성 — 스펙 확인 시 접근 승인 절차가 별도로 필요한지 반드시 확인 |
+| 대시보드 | 상태 | base_url | key_env | 엔드포인트 | 담당(owner) | 최종 확인일 | 민감도/주의사항 |
+|---|---|---|---|---|---|---|---|
+| ERP (손익/실적) | ✅ 사용 가능 | `http://10.10.190.25:8000` | `ERP_API_KEY` | `api/external/board`(전사 손익, `ym` 파라미터), `api/external/b2b`(B2B 실손익), `api/external/loadshop`(로드샵 실손익), `api/external/input`(수익상세 입력폼, 가장 상세·복잡) | - | - | 전사 손익·조직별 마진 등 민감 재무 데이터. Phase 5 외부 배포 전 Team Lead가 민감도 재확인 |
+| AX | ✅ 사용 가능 | `https://10.10.70.81:8011` (자가서명 인증서 — `--ca-cert certs/ax_server.pem` 필수) | `AX_API_KEY` | `api/v1/export/cases`(AX 사례 데이터), `api/v1/export/reports`(부서 보고서/KPI 스냅샷). 공통 선택 파라미터 `dept`(부서 ID — **한글 부서명**, 예: `채널비즈니스팀`. `finance` 같은 영문 코드 아님) | - | - | 키는 scope(`cases`/`reports`)별 권한 분리 — 해당 scope 없으면 403. reports에는 부서 보고서 본문(HTML)이 포함될 수 있음, 외부 배포 전 내용 확인 |
+| 현장 | ✅ 사용 가능 | `https://crm.ax.barogo.io` | `FIELD_API_KEY` | `api/external/dashboard`(바로고·모아라인·딜버 배송 실적 종합 — "바모딜". `date`+`ym` 필수, `sido` 선택(지역 필터)) | - | - | 배송 건수(전체/C2C/B2B)·수행 라이더 수. 응답 `sensitivity` 필드가 `general`로 확인됨(브랜드별·지역별 집계 — 개인정보 없음). 표준 CA 인증서라 `--ca-cert` 불필요 |
+| 인사 | ⏳ 스펙 확인 필요 | - | - | - | - | - | 개인정보(급여·평가 등) 포함 가능성이 높음 — 스펙 확인 시 접근 범위·마스킹 필요 여부를 반드시 함께 확인 |
+| 마켓 인텔리전스 | ✅ 사용 가능 | `https://barogo-intel.vercel.app` | `MARKET_API_KEY` | `api/report`(주차 리포트 본문, `week` 필수 예: `2026-W30`, `locale` 선택 `global`/`kr`/`tech`), `api/archive/search`(아카이브 검색, `weekFrom`/`weekTo`/`company`/`keyword`/`q`/`locale` 모두 선택), `api/keywords`(키워드 목록, `locale` 선택) | - | - | 공개 Vercel 호스팅 — **현재 서버측 인증 미구현**(누구나 접근 가능). 추후 X-API-Key 추가 예정이며 우리는 이미 헤더를 보내므로 그때 가서 클라이언트 변경 불필요. 인증서는 표준 CA 발급이라 `--ca-cert` 불필요 |
+| 브랜드 | ⏳ 스펙 확인 필요 | - | - | - | - | - | - |
+| 법무 | ⏳ 스펙 확인 필요 | - | - | - | - | - | 소송·계약 등 기밀 정보 포함 가능성 — 스펙 확인 시 접근 승인 절차가 별도로 필요한지 반드시 확인 |
 
 "⏳ 스펙 확인 필요" 대시보드는 아직 호출할 수 없다 — Team Lead가 assignment로 줘도 alpha는 데이터를
 지어내지 말고 "{부서명} 대시보드 스펙 미확인 — 조회 불가"로 명시한 뒤 에스컬레이션한다.
@@ -62,6 +64,17 @@ python scripts/dashboard_fetch.py --base-url https://10.10.70.81:8011 \
 없이 호출하면 `SSL: CERTIFICATE_VERIFY_FAILED`로 실패한다 — 인증서 검증을 끄는(curl -k류) 방식
 대신 이 인증서를 신뢰 루트로 명시적으로 고정하는 방식을 쓴다.
 
+## 현장 호출 예시
+```bash
+export FIELD_API_KEY=barogo_xxx
+python scripts/dashboard_fetch.py --base-url https://crm.ax.barogo.io \
+  --path api/external/dashboard --key-env FIELD_API_KEY \
+  --query date=2026-07-30 --query ym=2026-07 --query sido=서울
+```
+`sido`는 선택 파라미터(생략 시 전국 집계로 추정 — 실제 생략 동작은 미확인이므로 전국 데이터가
+필요하면 우선 생략 없이 확인 후 사용). `date`와 `ym`은 함께 전달한다(`ym`이 월 단위 집계 기준,
+`date`의 정확한 역할은 미확인 — 현재는 두 값을 함께 보내는 방식만 검증됨).
+
 ## 마켓 인텔리전스 호출 예시
 ```bash
 export MARKET_API_KEY=mkt_xxx   # 서버가 아직 검증하지 않지만 스크립트 요구사항상 값은 채워야 함
@@ -72,6 +85,8 @@ python scripts/dashboard_fetch.py --base-url https://barogo-intel.vercel.app \
 ## 인용 원칙
 조회 결과를 분석 결과에 사용할 때는 `source_url`(호출한 엔드포인트 전체 URL)과 `fetched_at`을
 반드시 함께 인용한다. 원문 수치와 alpha 자신의 해석·분석을 명확히 구분해서 기술한다.
+조회된 수치가 부분 조회거나 시점이 오래된 경우 "추정"으로 명시하고, 조회되지 않은 항목을 알고 있는
+배경지식으로 채우지 않는다.
 
 ## 승인 필요 (강제 규칙)
 `dashboard_fetch.py`를 한 번이라도 사용한 사이클은 task type과 무관하게 Phase 5(외부 배포) 전

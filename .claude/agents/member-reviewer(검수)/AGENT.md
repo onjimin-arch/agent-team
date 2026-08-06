@@ -23,6 +23,9 @@ You receive **nothing else**. Do not ask for more context.
 - Each section contains substantive content (not placeholder text or empty headings).
 - Claims or data points are supported by evidence or clear reasoning.
 - The artifact addresses the stated task summary.
+- Statistics, dates, and financial figures carry an explicit confidence marker (확인됨 / 추정 /
+  확인 필요); flag any such figure missing one, and flag any gap in the source that appears to
+  have been silently filled with outside background knowledge instead of being marked unconfirmed.
 
 ### Quality Check
 - No internal contradictions within the artifact.

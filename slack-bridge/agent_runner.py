@@ -32,15 +32,25 @@ _WORKSPACE_HINT_INITIAL = """
 현재 활성 워크스페이스 슬러그: `{slug}`
 모든 산출물은 `output/{slug}/` 하위에만 저장합니다.
 
-- Phase 1 계획: `output/{slug}/plan.md`
-- Phase 2 멤버 산출물: `output/{slug}/{{member-name}}/`
-- Phase 3 리뷰 로그: `output/{slug}/review-log.md`
-- Phase 4 최종 산출물: `output/{slug}/final/final-artifact.md`
-- Phase 5 Slack payload: `output/{slug}/slack-notification.json`
+**먼저 CLAUDE.md Phase 0(업무 유형 1차 분류)로 quick query 인지 판별하세요.** 이 판별이 아래 경로
+전체를 가릅니다 — 판별 없이 습관적으로 풀 파이프라인으로 진행하지 않습니다.
+
+- **quick query 로 판별됨** → `.claude/skills/quick-query/SKILL.md` 의 Quick Query Protocol만
+  따릅니다. `output/{slug}/quick-query-log.md`(감사 로그) 와 `output/{slug}/slack-notification.json`
+  (응답 전달용)만 작성하고 종료합니다. `plan.md`/`member-*/`/`review-log.md`/`final/`은 만들지
+  않고, Phase 1~6(계획·리뷰·통합·배포·회고)도 실행하지 않습니다 — Notion/Slack 배포 스크립트도
+  직접 호출하지 않습니다(그 slack-notification.json 을 봇이 대신 전달합니다).
+- **quick query 아님(풀 파이프라인)** → 아래 경로를 그대로 사용합니다:
+  - Phase 1 계획: `output/{slug}/plan.md`
+  - Phase 2 멤버 산출물: `output/{slug}/{{member-name}}/`
+  - Phase 3 리뷰 로그: `output/{slug}/review-log.md`
+  - Phase 4 최종 산출물: `output/{slug}/final/final-artifact.md`
+  - Phase 5 Slack payload: `output/{slug}/slack-notification.json`
 
 진행 규칙:
 - CLAUDE.md 의 팀장 프로토콜 및 `.claude/configs/team-config.yaml` 의 멤버 정의를 그대로 따릅니다.
-- Phase 전환 시점마다 `Phase {{N}} 시작:` 으로 시작하는 짧은 한 줄 로그를 출력합니다.
+- Phase 전환 시점마다 `Phase {{N}} 시작:` 으로 시작하는 짧은 한 줄 로그를 출력합니다(quick query
+  경로에서도 "Phase 0 판별:" 로그는 남깁니다).
 """
 
 _WORKSPACE_HINT_FOLLOWUP = """
@@ -98,11 +108,15 @@ def run_team_lead(
 
     cancelled = bool(cancel_event and cancel_event.is_set())
     final_path = workspace / "final" / "final-artifact.md"
+    # Quick Query 경로(CLAUDE.md Phase 0 → Quick Query Protocol)는 풀 파이프라인을 타지 않으므로
+    # final-artifact.md 를 만들지 않는다 — 대신 quick-query-log.md 존재 여부로 완료를 판정한다.
+    # 이게 없으면 정상적으로 끝난 조회도 아래 "partial"(⚠️ 부분 완료)로 오분류된다.
+    quick_query_log = workspace / "quick-query-log.md"
     returncode = result.get("returncode")
 
     if cancelled:
         status = "cancelled"
-    elif final_path.exists():
+    elif final_path.exists() or quick_query_log.exists():
         status = "completed"
     elif returncode not in (0, None):
         # opencode 서브프로세스가 비정상 종료 — stdout 0줄로 조용히 죽는 케이스 포함
@@ -157,12 +171,15 @@ def _run_subprocess(
             f"업무 요청이 접수되었습니다.\n\n"
             f"**업무 설명**: {task_description}\n"
             f"**워크스페이스 슬러그**: `{topic_slug}`\n\n"
-            f"CLAUDE.md 의 팀장 프로토콜에 따라 Phase 1(기획) → 2(실행) → 3(리뷰) → 4(통합) → "
-            f"5(배포) 를 순서대로 수행하세요. 최종 산출물은 `output/{topic_slug}/final/final-artifact.md` 로 "
-            f"저장합니다. **Phase 5는 사용자가 별도로 요청하지 않아도 항상 수행합니다** — "
-            f"`team-config.yaml` 의 `distribution` 에서 `enabled: true` 인 엔드포인트(Slack/Notion)에 "
-            f"실제로 배포하는 것까지가 이 작업의 기본 범위이며, Phase 1-4 완료만으로 작업이 끝난 것이 "
-            f"아닙니다."
+            f"먼저 CLAUDE.md Phase 0 로 quick query 여부를 판별하세요.\n\n"
+            f"- **quick query 로 판별되면** Quick Query Protocol만 수행하고 끝냅니다 — Phase 1~6 은 "
+            f"실행하지 않습니다.\n"
+            f"- **quick query 가 아니면** CLAUDE.md 의 팀장 프로토콜에 따라 Phase 1(기획) → 2(실행) → "
+            f"3(리뷰) → 4(통합) → 5(배포) 를 순서대로 수행하세요. 최종 산출물은 "
+            f"`output/{topic_slug}/final/final-artifact.md` 로 저장합니다. **이 경우 Phase 5는 사용자가 "
+            f"별도로 요청하지 않아도 항상 수행합니다** — `team-config.yaml` 의 `distribution` 에서 "
+            f"`enabled: true` 인 엔드포인트(Slack/Notion)에 실제로 배포하는 것까지가 이 작업의 기본 "
+            f"범위이며, Phase 1-4 완료만으로 작업이 끝난 것이 아닙니다."
         )
 
     cmd = ["opencode", "run", "--dangerously-skip-permissions", "--model", model, prompt]

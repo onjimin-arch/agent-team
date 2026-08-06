@@ -29,12 +29,31 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
 API_BASE = "https://slack.com/api"
+
+# team-config.yaml 의 distribution.slack.include_download_link 는 기본 false(다운로드 링크 제외)인데,
+# Team Lead(LLM)가 이 규칙을 반복해서 무시하고 slack-notification.json 에 다운로드 링크를 넣는 사례가
+# 여러 워크스페이스에서 확인됐다(텍스트 지시만으로는 신뢰할 수 없음). 그래서 이 스크립트가 발송 직전에
+# 한 번 더 결정론적으로 걸러낸다 — "다운로드/download" 라벨과 최종 산출물 링크(final-artifact.md)가
+# 함께 있는 블록만 정확히 매칭해 제거하고, 무관한 본문 언급(예: "Markdown 다운로드 기능")은 건드리지
+# 않는다. 정말로 다운로드 링크를 보내야 하면(include_download_link: true) --allow-download-link 를
+# 명시적으로 넘긴다 — 기본값은 항상 "제거"다.
+_DOWNLOAD_LINK_LABEL_RE = re.compile(r"다운로드|download", re.IGNORECASE)
+
+
+def _is_download_link_block(block: dict) -> bool:
+    text = json.dumps(block, ensure_ascii=False)
+    return bool(_DOWNLOAD_LINK_LABEL_RE.search(text)) and "final-artifact.md" in text
+
+
+def _strip_download_link_blocks(blocks: list) -> list:
+    return [b for b in blocks if not _is_download_link_block(b)]
 
 
 def _call(method: str, token: str, **params) -> dict:
@@ -123,6 +142,9 @@ def main() -> int:
     parser.add_argument("--channel", required=True, help="채널명(#agent-log) 또는 채널 ID")
     parser.add_argument("--text", default="", help="fallback/알림 텍스트")
     parser.add_argument("--blocks-file", default="", help="Block Kit JSON 파일 경로 (선택)")
+    parser.add_argument("--allow-download-link", action="store_true",
+                         help="team-config.yaml 의 distribution.slack.include_download_link: true 일 때만 "
+                              "명시적으로 넘긴다. 기본값(생략)은 다운로드 링크 블록을 강제로 제거한다.")
     args = parser.parse_args()
 
     token = os.environ.get("SLACK_BOT_TOKEN", "").strip()
@@ -137,6 +159,8 @@ def main() -> int:
             blocks = payload.get("blocks", payload if isinstance(payload, list) else None)
             if not args.text:
                 args.text = payload.get("text", "")
+            if blocks and not args.allow_download_link:
+                blocks = _strip_download_link_blocks(blocks)
         except (OSError, json.JSONDecodeError) as e:
             print(json.dumps({"success": False, "error": "blocks_file_read_failed", "detail": str(e)},
                               ensure_ascii=False))

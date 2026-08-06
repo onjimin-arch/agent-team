@@ -115,6 +115,18 @@ Slack 채널에 작업 내용을 그냥 입력하면 됩니다:
 
 ## 실행 방법
 
+### 0. Git Pre-commit Hook 활성화 (최초 1회)
+
+이 저장소에는 `team-config.yaml`과 `.claude/skills/dept-dashboard-reader/SKILL.md`처럼 같은
+정보를 이중 관리하는 파일들이 있다. 한쪽만 고치고 커밋하면 서로 다른 사실을 가리키게 되는 걸
+막기 위해 커밋 직전 자동 검사를 도는 Git 훅을 저장소에 함께 두었다(`scripts/git-hooks/`). 다만
+`.git/hooks/`는 버전 관리되지 않으므로, **클론(또는 이 저장소를 새로 내려받은 환경)마다 최초
+1회** 아래 명령으로 직접 연결해야 한다(`git clone`이 자동으로 해주지 않는다):
+
+```bash
+git config core.hooksPath scripts/git-hooks
+```
+
 ### 1. 환경 설정
 
 ```bash

@@ -1,0 +1,41 @@
+{
+  "text": "✅ [에이전트 팀] 최근 3개월 시장 동향 분석 및 바로고 액션 아이템 3가지 완료",
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*최근 3개월 시장 동향 분석 및 바로고 액션 아이템 3가지*\n최근 3개월 배달 시장의 규제, 플랫폼 표준화, 비용 구조 변화를 분석해 바로고 우선 액션 3가지를 정리했습니다."
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Task Type*\nresearch-report"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*활성 멤버*\nalpha(조사) · gamma(팩트체크) · delta(시각화) · beta(보고서)"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*핵심 액션 1*\n라이더 근로자성 리스크 정량화"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*핵심 액션 2*\n표준연동 + SLA + AI 배차 운영 패키지"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*핵심 액션 3*\n가맹점 비용 방어 영업 실행"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Notion*\nhttps://app.notion.com/p/3-2026-08-05-3b3363ae08db819189e7fa598364d2d1"
+        }
+      ]
+    }
+  ]
+}

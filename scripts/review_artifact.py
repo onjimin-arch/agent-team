@@ -43,7 +43,7 @@ _TIMEOUT_MARKER = "###REVIEW_TIMEOUT###"
 _EXIT_CODE = {"APPROVE": 0, "EDIT": 2, "REASSIGN": 3}
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_REVIEWER_AGENT_MD = _REPO_ROOT / ".claude" / "agents" / "member-reviewer" / "AGENT.md"
+_REVIEWER_AGENT_MD = _REPO_ROOT / ".claude" / "agents" / "member-reviewer(검수)" / "AGENT.md"
 
 
 def _strip_ansi(text: str) -> str:

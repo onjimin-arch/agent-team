@@ -79,8 +79,11 @@ AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 **⑥ human_approval 게이트 (Termination Protocol)**
 자동 승인. 즉시 Phase 5 진입.
 **예외**: `termination.high_risk_override_enabled: true` 이고 아래 둘 중 하나라도 해당하면 이 규칙을
-적용하지 않는다 — Phase 5 중 **Notion(5-1)을 제외한** 나머지 엔드포인트(Slack 등)는 자동 실행하지 않고
-승인 대기 알림만 보낸다. `auto-log.md`에 "human_approval override — Phase5 보류(Notion 제외)" 기록.
+적용하지 않는다 — Phase 5 중 **Notion(5-1)을 제외한** 나머지 엔드포인트(Slack 등)는 자동 실행하지 않고,
+아래 "인터랙티브 승인(Slack 버튼)" 절차로 사람에게 직접 승인을 물어본다. **승인**되면 그 자리에서 즉시
+나머지 엔드포인트를 실행하고, **거부**되거나 **타임아웃**되면 기존처럼 보류한다(사람이 세션을 열어
+직접 트리거). `auto-log.md`에 "human_approval override — Phase5 인터랙티브 승인 →
+{승인/거부/타임아웃-보류}" 기록.
 (`high_risk_override_enabled: false` 인 동안은 이 예외 자체가 꺼져 있으므로 고위험 type/대시보드
 사용 여부와 무관하게 그냥 자동 승인·Phase 5 진행. 사유는 "경영전략실 고위험 task type 특별 처리
 규칙" 3번 참조.)
@@ -103,10 +106,13 @@ Notion 저장(5-1)은 이 override 와 무관하게 `distribution.notion.enabled
 
 **⑨ Phase 6 — 신규 에이전트 제안**
 Phase 6 자가진단에서 "에이전트 갭"(과부하)이 감지돼도 AUTO 모드에서는 **team-config.yaml에 신규
-member를 자동으로 추가하지 않는다** — human_approval 설정과 무관하게 항상 사람 승인 대기다. Slack으로
-"🆕 신규 에이전트 제안 대기 — {제안 요약}" 알림만 보내고, 실제 반영은 사람이 세션을 열어 직접 승인한
-뒤 진행한다. 스킬 갭(기존 멤버 역량 확장)은 이 규칙 대상이 아니며 자동으로 반영한다(Phase 6 참조).
-`auto-log.md`에 "Phase 6 — {스킬 갭 자동 반영 내용} / 에이전트 갭 제안 보류(사람 승인 대기)" 형태로 기록.
+member를 자동으로 추가하지 않는다** — human_approval 설정과 무관하게 항상 사람 승인이 필요하다. 아래
+"인터랙티브 승인(Slack 버튼)" 절차로 "🆕 신규 에이전트 제안 — {제안 요약} — 반영할까요?" 버튼을 보내고
+실제 클릭 응답을 기다린다. **승인**되면 그 자리에서 즉시 `team-config.yaml`·`.claude/agents/`에
+반영한다. **거부**되거나 **타임아웃**되면 반영하지 않는다 — 타임아웃 시엔 사람이 세션을 열어 직접
+승인해야 진행되는 것이 최종 안전장치다. 스킬 갭(기존 멤버 역량 확장)은 이 규칙 대상이 아니며 자동으로
+반영한다(Phase 6 참조). `auto-log.md`에 "Phase 6 — {스킬 갭 자동 반영 내용} / 에이전트 갭 제안 →
+{승인/거부/타임아웃-보류}" 형태로 기록.
 
 ### 경로 규칙 (이하 WS = `/output/{topic-slug}`)
 - 계획 문서: `WS/plan.md`
@@ -116,6 +122,71 @@ member를 자동으로 추가하지 않는다** — human_approval 설정과 무
 - 팀 역량 자가진단 기록: `WS/retrospective.md` (Phase 6)
 
 `team-config.yaml` 의 `output.directory` 값은 워크스페이스 기준 상대 경로로 해석합니다.
+
+## 인터랙티브 승인 (Slack 버튼)
+사람 승인이 필요한 지점(AUTO 모드 human_approval 게이트, 고위험 task type override, Phase 1-2 plan
+확정, Phase 6-3 신규 에이전트 제안, Quick Query 의 민감 데이터 공유 승인 등)에서 공통으로 쓰는 절차다.
+Slack 연동 실행 환경(AUTO 모드 등)에서는 "알림만 보내고 사람이 나중에 세션을 열어야 하는" 수동 방식
+대신, 실제로 버튼 클릭 응답을 기다렸다가 그 결과로 즉시 다음 단계를 진행한다.
+
+```
+python scripts/slack_approval.py --channel "{알림 채널 — 보통 distribution.slack.channel}" \
+  --question "{승인/선택을 요청하는 질문 한 줄}" \
+  --options "승인,거부" \
+  --timeout-sec {execution.interactive_approval.default_timeout_sec, 기본 1800}
+```
+
+동작:
+- 지정한 채널에 버튼이 달린 메시지를 올리고, `slack-bridge/app.py` 의 클릭 핸들러가 응답을 기록할
+  때까지 스크립트가 폴링하며 기다린다(최대 `--timeout-sec`).
+- **응답 옴** (`answered: true`): `choice` 필드로 사용자가 고른 선택지가 온다. 그 값에 따라 바로
+  다음 단계로 분기한다 — 이게 "실시간 승인 수신"이 실제로 동작하는 지점이다.
+- **타임아웃** (`answered: false, timeout: true`): 실패로 취급하지 않는다(exit 0). 이 경우
+  `execution.interactive_approval.fallback_on_timeout`(기본 `hold`)에 따라 각 규칙이 정의한 기존
+  "보류" 동작으로 폴백한다 — 사람이 나중에 이 대화(또는 워크스페이스)를 열어 직접 진행 여부를
+  확인해야 한다. 타임아웃을 승인으로 간주해 임의로 진행하지 않는다.
+- 옵션 문구에 "거부"/"반려"/"취소"/"reject"/"no" 등이 들어가면 해당 버튼이 자동으로 danger(빨강)
+  스타일로 표시된다.
+
+**환경 제약**: 이 스크립트는 `SLACK_BOT_TOKEN` 과, 봇이 배포된 slack-bridge 프로세스가 같은
+파일시스템(`slack-bridge/state/interactive-approvals.json`)을 공유해야 동작한다. Slack 봇 없이
+대화형 세션에서만 실행 중이라면(슬랙 연동 없는 로컬 세션 등) 이 스크립트 대신 사용자에게 직접 자연어로
+승인을 요청한다 — 각 규칙에서 "대화형 세션" 분기로 명시된 경우가 이에 해당한다.
+
+## Phase 0: 업무 유형 1차 분류 (Quick Query vs Task Pipeline)
+`task.types` 판별(Phase 1-0)보다 먼저 실행한다. 목적은 "이 요청이 리포트/코드 수정처럼 Phase 1~6
+풀 파이프라인이 필요한 일인지, 아니면 연동 데이터소스에서 사실 하나만 확인해 주면 끝나는 조회인지"를
+가르는 것이다. slack-bridge(`app.py`)는 이미 `task.quick_query.triggers` 로 "이 메시지에 반응할지"를
+싸게 걸러 opencode 를 실행할지만 결정했다 — 이 Phase 0 이 실제 최종 판단이다. "새 작업" 문구 유무와는
+무관하게 항상 실행한다.
+
+1. 요청 문장에서 `task.quick_query.triggers`(조회/확인해줘/얼마/몇 건/언제/대시보드·부서명 등)와
+   `task.quick_query.report_signal_triggers`(분석/보고서/리서치/전략/계획/설계/타당성 등)를 각각
+   센다.
+2. **quick_query 신호만 있고 report_signal 이 없거나 약함** → Quick Query Protocol(아래)로 진입,
+   Phase 1~6 은 건너뛴다.
+3. **report_signal 이 있거나 quick_query 신호가 아예 없음** → 기존 Phase 1-선행/1-0 그대로 진행
+   (풀 파이프라인).
+4. **애매함**(quick_query·report_signal 신호가 비슷한 비중으로 섞여 있어 확신이 안 설 때) — 추측하지
+   않는다. 위 "인터랙티브 승인(Slack 버튼)" 절차로 다음처럼 직접 묻는다:
+   ```
+   python scripts/slack_approval.py --channel "{채널}" \
+     --question "이 요청을 [빠른 조회]로 처리할까요, 아니면 [정식 리포트]로 처리할까요?" \
+     --options "빠른 조회,정식 리포트"
+   ```
+   응답이 "빠른 조회"면 2번으로, "정식 리포트"면 3번으로, 타임아웃이면 **3번(풀 파이프라인)을 기본값
+   으로** 진행한다 — 무거운 쪽을 기본값으로 삼아야 정보 누락 없이 안전하게 처리된다.
+5. 판단 결과를 `WS/plan.md`(풀 파이프라인 진입 시) 또는 `WS/quick-query-log.md`(Quick Query 진입 시)
+   상단에 한 줄로 남긴다: "Phase 0 판별: {quick_query|task_pipeline} — {근거}".
+
+### Quick Query Protocol
+Quick Query 로 판별되면 `.claude/skills/quick-query/SKILL.md` 의 절차를 그대로 따른다 — 요약:
+멤버 fan-out 없이 Team Lead가 직접 관련 스킬(`dept-dashboard-reader`/`dept-notion-reader`/
+`sql-reader`/`shared/web-research`)의 스크립트를 호출하고, `WS/quick-query-log.md`(감사 로그)와
+`WS/slack-notification.json`(응답 전달용 Block Kit — Phase 5 와 동일 스키마)만 작성한 뒤 종료한다.
+민감한 대시보드 데이터가 쓰였다면 답변을 보내기 전에 인터랙티브 승인을 받는다(스킬 문서 4번 참조).
+`WS/plan.md`·`member-*/`·`review-log.md`·`final/final-artifact.md`는 만들지 않는다 — 이 경로는 Phase
+1~6 전체를 대체한다.
 
 ## Phase 1: Planning Protocol
 
@@ -230,12 +301,13 @@ member를 자동으로 추가하지 않는다** — human_approval 설정과 무
    - **대화형 세션**: 전역 `human_approval` 값과 무관하게 최종 산출물을 제시하고 사람의 승인을 받을 때까지
      Phase 5 진입을 보류합니다 (`human_approval: true` 로 취급).
    - **AUTO 모드**: Phase 1~4(작성·통합)는 기존과 동일하게 자동 진행합니다. 단 **Phase 5 중 Notion(5-1)을
-     제외한 나머지(Slack 등)는 자동 실행하지 않습니다** — 대신 Slack으로 "⚠️ 승인 대기 — {slug} 최종본은
-     고위험 문서이므로 검토 후 별도 배포가 필요합니다" 알림만 보내고(md 다운로드 링크는 포함하지 않음 —
-     `distribution.slack.include_download_link: false` 와 동일하게 처리), `auto-log.md`에
-     "human_approval override — Phase5 보류(Notion 제외)" 사유를 기록합니다. 실시간 승인 수신(Slack 반응
-     대기 등)은 지원하지 않으므로, Notion 을 제외한 실제 배포는 사람이 워크스페이스를 열어 직접 트리거하는
-     수동 절차로 남깁니다.
+     제외한 나머지(Slack 등)는 자동 실행하지 않습니다** — 대신 위 "인터랙티브 승인(Slack 버튼)" 절차로
+     "⚠️ {slug} 최종본은 고위험 문서입니다 — 검토 후 배포를 승인할까요?" 버튼을 보내고 실제로 클릭
+     응답을 기다립니다(md 다운로드 링크는 포함하지 않음 — `distribution.slack.include_download_link: false`
+     와 동일하게 처리). **승인**되면 그 자리에서 즉시 Notion 을 제외한 나머지 Phase 5 엔드포인트를
+     실행합니다. **거부**되거나 **타임아웃**되면 기존처럼 보류하고, `auto-log.md`에
+     "human_approval override — Phase5 인터랙티브 승인 → {승인/거부/타임아웃-보류}" 사유를 기록합니다.
+     타임아웃 시엔 여전히 사람이 워크스페이스를 열어 직접 트리거하는 수동 절차가 최종 안전장치로 남습니다.
    - **예외 — Notion 저장(5-1)**: `ir-relations`/`gr-policy`/`pr-crisis` 세 type 모두 Notion 은 사내
      지식베이스일 뿐 투자자·정부·언론 등 외부로 직접 나가는 채널이 아니므로 이 override 대상에서
      제외합니다. `distribution.notion.enabled: true` 면 대화형 세션·AUTO 모드 모두 승인 대기와 무관하게
@@ -281,8 +353,12 @@ Validation:
 ### 1-2. Plan 확정 체크포인트
 `plan.md` 초안 작성 직후, Phase 2 진입 전에 실행한다.
 
-- `human_approval: true` → 사용자에게 plan.md 요약(task type, 활성 멤버, 배정 내용)을 제시하고 승인을 요청한다.
-  승인이 확인될 때까지 Phase 2 진입 금지.
+- `human_approval: true` →
+  - **대화형 세션**: 사용자에게 plan.md 요약(task type, 활성 멤버, 배정 내용)을 자연스러운 대화로
+    제시하고 승인을 요청한다. 승인이 확인될 때까지 Phase 2 진입 금지.
+  - **Slack 경로**(슬랙 연동 실행 환경): 위 "인터랙티브 승인(Slack 버튼)" 절차로 plan.md 요약과 함께
+    승인 버튼을 보내고 클릭 응답을 기다린다. **승인**되면 즉시 Phase 2 진입, **거부**되거나
+    **타임아웃**되면 보류하고 사람이 세션을 열어 직접 확정해야 진행된다.
 - `human_approval: false` → plan.md 하단에 "자동 확정 후 Phase 2 진입" 타임스탬프를 기록하고 즉시 Phase 2 시작.
 - AUTO 모드(`[AUTO: slug]`) → `human_approval` 무관하게 자동 진행.
 
@@ -366,9 +442,21 @@ Record results (3-0 검증 결과 + 3-1 판정 원문 요약) in `WS/review-log.
   ```
   각 항목은 한 줄에 하나씩, `**라벨**: 값` 형식(콜론 뒤 공백 허용)으로 작성한다.
 - Validate integration quality against config criteria:
-  - **결정론적 부분** (`rule`/`schema` 기준): `scripts/validate_artifact.py --file "WS/final/final-artifact.md" --sections "..."` 로 최종 산출물도 다시 검증한다 (개별 멤버 산출물이 통과했어도 통합 과정에서 섹션이 누락될 수 있음).
-  - **`llm_self_check` 기준**(논리적 정합성·중복/모순): 이 부분만 Team Lead가 직접 읽고 판단한다.
-- If integration fails, rerun execution cycles up to `termination.max_cycles`.
+  - **결정론적 부분** (`rule`/`schema` 기준): `scripts/validate_artifact.py --file "WS/final/final-artifact.md" --sections "..."` 로 최종 산출물도 다시 검증한다 (개별 멤버 산출물이 통과했어도 통합 과정에서 섹션이 누락되거나 제목이 바뀔 수 있음 — 실사례: `output/gpu-지원/final/final-artifact.md`는 "추천 사항"이 "대상별 최우선 추천"으로 병합돼 섹션명이 달라졌다).
+  - **독립 품질 검토(`isolated_review` 기준 — 깊이/인사이트)**: Phase 3-1과 동일한 방법(방법 A: `scripts/review_artifact.py`, 방법 B: 격리된 `Agent` 서브에이전트)으로 `WS/final/final-artifact.md` 자체를 `member-reviewer` 기준으로 한 번 더 검토한다. 방금 통합문을 작성한 Team Lead 자신이 아니라 독립된 리뷰어가 판단해야 통합 과정에서 생긴 깊이 저하(추상적 문장으로 뭉뚱그리기, 근거 누락, 섹션 임의 병합)를 잡아낼 수 있다:
+    ```
+    python scripts/review_artifact.py \
+      --artifact "WS/final/final-artifact.md" \
+      --sections "요약,핵심 인사이트,추천 사항" \
+      --task-type "{task type}" \
+      --task-summary "{한 줄 요약}" \
+      --out "WS/final/.review-verdict.md"
+    ```
+    - `APPROVE` → 아래 `llm_self_check`로 진행.
+    - `EDIT(내용)` → Team Lead가 지적된 라인 수준 수정을 직접 반영하고 재검토 없이 진행(Phase 3 EDIT와 동일한 "minor changes only" 원칙).
+    - `REASSIGN(사유)` → "통합 실패"로 간주해 아래 재실행 규칙으로 넘긴다. Findings의 `Section` 열을 근거로 원인이 특정 멤버 산출물의 깊이 부족이면 그 멤버까지 재실행 대상에 포함한다.
+  - **`llm_self_check` 기준**(여러 멤버 산출물을 모두 본 사람만 판단 가능한 부분 — 섹션 간 논리적 정합성·중복/모순 없음. `member-reviewer`는 다른 멤버 산출물을 보지 못하므로 이 교차검증은 대신할 수 없다. 개별 섹션의 깊이·근거 충분성은 위 독립 품질 검토가 이미 담당하므로 여기서 다시 판단하지 않는다): 이 부분만 Team Lead가 직접 읽고 판단한다.
+- If integration fails (결정론적 검증 실패 / 독립 품질 검토 REASSIGN / `llm_self_check` 실패 중 하나라도 해당), rerun execution cycles up to `termination.max_cycles`.
 
 ## Termination Protocol
 Apply termination rules in order:
@@ -434,12 +522,18 @@ Notion 페이지는 정상 생성됐는데 Slack 메시지엔 링크가 전혀 �
 - `WS/slack-notification.json` 을 만들 때, 5-1 에서 Notion 이 성공했다면 그 URL 을 blocks 에 포함시킨다.
   Notion 이 비활성화됐거나 실패했다면 그 사실을 굳이 blocks 에 넣지 않아도 된다(성공한 것만 안내).
 - `include_download_link: true` 면 `download_link_prefix + {slug}/final/final-artifact.md` 도 blocks 에
-  포함시킨다.
+  포함시킨다. **기본값(`false`)일 때는 절대 다운로드 링크를 넣지 않는다** — 이 지시를 텍스트로만
+  남겼을 때 반복적으로 무시된 전례가 있어(예: `output/이번-전사-경영-실적-손익`,
+  `output/배달대행사-pg사-이슈`), `scripts/slack_publish.py`와 `slack-bridge/app.py`가 발송 직전에
+  "다운로드/Download" 라벨 + `final-artifact.md` 링크 조합의 블록을 결정론적으로 한 번 더 제거한다 —
+  넣어도 실제로는 걸러지므로 애초에 넣지 않는다.
 - `Bash` 로 `scripts/slack_publish.py` 실행 (봇이 채널 멤버가 아니면 자동으로 join 을 먼저 시도한다):
   ```
   python scripts/slack_publish.py --channel "{distribution.slack.channel}" \
     --blocks-file "WS/slack-notification.json"
   ```
+  `include_download_link: true` 인 경우에만 위 명령에 `--allow-download-link` 를 추가로 붙인다 — 생략하면
+  스크립트가 기본적으로 다운로드 링크 블록을 제거한다.
 - `not_in_channel` + join 실패로 반환되면(비공개 채널 등) — 스크립트가 알려주는 `/invite @agent-team-bot`
   안내 문구를 그대로 5-4 기록과 사용자 보고에 사용한다. 재시도하지 말고 다음 엔드포인트로 진행한다.
 
@@ -467,6 +561,11 @@ Phase 5 직후(또는 Phase 5 가 스킵/보류됐다면 Termination Protocol �
    덧붙인 스킬이 있었는지 확인한다.
 4. "스펙 확인 필요"/"조회 불가"로 에스컬레이션된 지점이 있었다면, 그것이 이번만의 예외인지 반복되는
    패턴(같은 부서·같은 종류 요청이 이미 여러 번 막혔는지)인지 확인한다.
+5. `external_data_sources.dashboards`의 `enabled: true` 항목 중 `last_verified`가 90일 이상
+   지났거나 비어있는 항목이 있는지 확인한다(조직 개편·API 변경 등 아무도 커밋하지 않아도 발생하는
+   드리프트는 Git 훅으로 못 잡는다). 있다면 `WS/retrospective.md`에 "레지스트리 재확인 필요:
+   {대시보드명} (마지막 확인: {날짜})"로 기록한다. 재확인 결과가 이전과 동일하면 `last_verified`만
+   갱신, 스펙이 바뀌었으면 아래 6-2(스킬 갭) 절차로 처리한다.
 
 ### 6-2. 스킬 갭 (Skill Gap) — 자율 보강, 승인 불필요
 기존 멤버의 domain 범위 안에서 **스킬 문서·레지스트리만 부족**한 경우:
@@ -493,8 +592,9 @@ Phase 5 직후(또는 Phase 5 가 스킵/보류됐다면 Termination Protocol �
 3. **대화형 세션**: 제안 내용을 사용자에게 제시하고 승인을 기다린다. 승인 전에는 `team-config.yaml`·
    `.claude/agents/` 를 수정하지 않는다. 승인되면 `team-config.yaml` 에 신규 member 블록을 추가하고,
    `.claude/agents/member-{name}/AGENT.md` 를 작성하고, 필요한 skill 문서를 만든다.
-4. **AUTO 모드**: 절대 자동으로 반영하지 않는다 — "AUTO 모드 인터럽트 처리 규칙 ⑨" 참조. Slack 으로
-   제안 요약만 알리고, 실제 반영은 사람이 세션을 열어 승인해야 진행된다.
+4. **AUTO 모드**: 절대 즉시 반영하지 않는다 — "AUTO 모드 인터럽트 처리 규칙 ⑨" 참조. 위 "인터랙티브
+   승인(Slack 버튼)" 절차로 제안 요약과 함께 버튼을 보내고 클릭 응답을 기다린다. 승인되면 그 자리에서
+   반영, 거부/타임아웃되면 반영하지 않고 보류한다(타임아웃 시 최종 안전장치는 여전히 사람의 수동 승인).
 5. 거절되거나 보류되면 `WS/retrospective.md` 에 판단 결과를 기록하고 그대로 종료한다(제안을 이유로
    전체 프로세스를 지연시키지 않는다 — 이미 Phase 5 까지 끝난 뒤의 사후 점검이므로).
 
@@ -547,12 +647,26 @@ Phase 3/5 신뢰성을 위해 LLM 판단 대신 스크립트로 강제하는 지
 | 스크립트 | 용도 | 실패 시 |
 |---|---|---|
 | `scripts/validate_artifact.py` | 필수 섹션 존재/공백 여부 결정론적 검증 (Phase 3-0) | REASSIGN 사유로 사용 |
-| `scripts/review_artifact.py` | 격리된 서브프로세스에서 member-reviewer 판정 실행 (Phase 3-1) | `.review-verdict.md` 원문 직접 확인 |
+| `scripts/review_artifact.py` | 격리된 서브프로세스에서 member-reviewer 판정 실행 (Phase 3-1, Phase 4 최종 산출물 재검토) | `.review-verdict.md` 원문 직접 확인 |
 | `scripts/notion_publish.py` | `NOTION_API_TOKEN` 기반 Notion 페이지 생성 (MCP 미가용 시 Phase 5 폴백) | hint 메시지 그대로 보고 |
 | `scripts/slack_publish.py` | Slack 채널 join 선점검 + 발송 (Phase 5) | hint 메시지 그대로 보고, 다음 단계 계속 |
 | `scripts/notion_fetch.py` | `DEPT_NOTION_API_TOKEN` 기반 타 부서 Notion 조회 전용 (member-alpha) | hint 메시지 그대로 보고 |
 | `scripts/dashboard_fetch.py` | 범용 사내 부서 대시보드 API 조회 (member-alpha, ERP·현장·인사·AX·브랜드·법무 — base-url/path/key-env 인자로 받음, `dept-dashboard-reader` SKILL.md 레지스트리 참조) | hint 메시지 그대로 보고 (401 시 키 재발급 안내) |
 | `scripts/sql_guard.py` | SQL 쿼리 SELECT-only 검증 (미사용 대기 — 자유 SQL 게이트웨이 생기면 사용) | REASSIGN 사유로 사용 (변경성 쿼리 시도) |
+| `scripts/slack_approval.py` | 인터랙티브 승인 버튼 게시 + 클릭 응답 대기 (Phase 0 애매 판정, human_approval override, Phase 1-2, Phase 6-3, Quick Query 민감 데이터 승인 등) | 타임아웃 시 `answered: false` — 각 규칙의 기존 "보류" 폴백으로 처리 |
+
+## Git Pre-commit Hook (문서 노후화 방지)
+`team-config.yaml`의 `external_data_sources.dashboards`와 `.claude/skills/dept-dashboard-reader/
+SKILL.md`의 레지스트리 표는 사내 대시보드 정보(base_url/key_env 등)를 이중 관리한다 — 한쪽만
+바뀌면 조용히 낡는다. `scripts/git-hooks/pre-commit`(활성화: README.md "0. Git Pre-commit Hook
+활성화" 참조)이 커밋 직전 `scripts/check_dashboard_registry_sync.py`로 두 파일이 함께 바뀌었는지
+검사하고, 한쪽만 바뀌었으면 커밋을 막는다. task-type ↔ member 매핑(`scripts/
+check_task_ownership_sync.py`)은 기계적으로 정확성을 검증할 수 없어 차단하지 않고 참고 메시지만
+출력한다.
+
+`dev` 타입 사이클 등에서 팀장이 자동으로 `git commit`을 실행하다가 이 훅 때문에 논제로 exit로
+실패하면, 일반적인 커밋 실패가 아니라 이 동기화 검사가 막은 것이다 — `--no-verify`로 무시하지
+말고 누락된 쪽 파일을 함께 갱신하거나 사용자에게 에스컬레이션한다.
 
 ## Skills Reference
 아래는 팀장이 참조하는 스킬 번들이다. `Skill` 도구가 있는 환경(대화형 Claude Code 세션)에서는 그것으로
@@ -563,6 +677,7 @@ Phase 3/5 신뢰성을 위해 LLM 판단 대신 스크립트로 강제하는 지
 - `task-planner` → `.claude/skills/task-planner/SKILL.md`
 - `artifact-reviewer` → `.claude/skills/artifact-reviewer/SKILL.md`
 - `integrator` → `.claude/skills/integrator/SKILL.md`
+- `quick-query` → `.claude/skills/quick-query/SKILL.md` (Phase 0 에서 Quick Query 로 판별됐을 때)
 - `shared/file-io` → `.claude/skills/shared/file-io/SKILL.md`
 - `shared/data-parser` → `.claude/skills/shared/data-parser/SKILL.md`
 
