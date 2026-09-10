@@ -775,6 +775,7 @@ def _synthesize_block_kit_payload(team_root: Path, slug: str) -> dict | None:
 
     written = _grab_meta(final_text, "작성일") or time.strftime("%Y-%m-%d")
     task_type = _grab_meta(final_text, "Task Type") or "research-report"
+    report_grade = _grab_meta(final_text, "보고서 등급")
     active = _grab_meta(final_text, "활성 멤버") or "alpha(조사) · beta(보고서)"
     active = re.sub(r"member-", "", active).strip()
     cycle = _grab_meta(final_text, "사이클") or "1 / 3"
@@ -790,16 +791,23 @@ def _synthesize_block_kit_payload(team_root: Path, slug: str) -> dict | None:
         if has_gamma else None
     )
 
+    fields = [
+        {"type": "mrkdwn", "text": f"*주제*\n{topic_short}"},
+        {"type": "mrkdwn", "text": f"*작성일*\n{written}"},
+        {"type": "mrkdwn", "text": f"*Task Type*\n{task_type}"},
+    ]
+    if report_grade:
+        # dev/code-review 등 등급 미적용 type 은 final-artifact.md 에 이 줄이 없어 report_grade == "" 임
+        fields.append({"type": "mrkdwn", "text": f"*보고서 등급*\n{report_grade}"})
+    fields += [
+        {"type": "mrkdwn", "text": f"*활성 멤버*\n{active}"},
+        {"type": "mrkdwn", "text": f"*사이클*\n{cycle}"},
+        {"type": "mrkdwn", "text": f"*승인*\n{approval}"},
+    ]
+
     blocks: list[dict] = [
         {"type": "header", "text": {"type": "plain_text", "text": "✅ 에이전트 팀 보고서 완료", "emoji": True}},
-        {"type": "section", "fields": [
-            {"type": "mrkdwn", "text": f"*주제*\n{topic_short}"},
-            {"type": "mrkdwn", "text": f"*작성일*\n{written}"},
-            {"type": "mrkdwn", "text": f"*Task Type*\n{task_type}"},
-            {"type": "mrkdwn", "text": f"*활성 멤버*\n{active}"},
-            {"type": "mrkdwn", "text": f"*사이클*\n{cycle}"},
-            {"type": "mrkdwn", "text": f"*승인*\n{approval}"},
-        ]},
+        {"type": "section", "fields": fields},
         {"type": "section", "text": {"type": "mrkdwn",
             "text": "*핵심 결과*\n" + "\n".join(f"• {x}" for x in insights[:5])}},
     ]

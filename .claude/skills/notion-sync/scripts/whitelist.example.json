@@ -1,0 +1,6 @@
+{
+  "items": [
+    { "type": "page", "id": "<Notion page id>" },
+    { "type": "data_source", "id": "<Notion data source(database) id>" }
+  ]
+}

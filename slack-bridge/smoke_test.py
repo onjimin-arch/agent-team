@@ -6,6 +6,7 @@ import asyncio
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -60,6 +61,32 @@ def test_is_command():
     assert not _is_command("안녕하세요"), "FAIL: 일반 인사"
     print(f"  _is_command logic  OK")
 
+# --- agent_runner._reconcile_misplaced_workspace (opencode 가 워크스페이스를
+#     slack-bridge/output/{slug}/ 밑에 잘못 저장하는 케이스 자동 복구, 2026-08-14 실사례) ---
+from agent_runner import _reconcile_misplaced_workspace
+
+def test_reconcile_misplaced_workspace():
+    with tempfile.TemporaryDirectory() as tmp:
+        team_root = Path(tmp)
+        wrong = team_root / "slack-bridge" / "output" / "테스트-슬러그"
+        wrong.mkdir(parents=True)
+        (wrong / "quick-query-log.md").write_text("content", encoding="utf-8")
+
+        notified = []
+        _reconcile_misplaced_workspace(team_root, "테스트-슬러그", notified.append)
+
+        correct = team_root / "output" / "테스트-슬러그" / "quick-query-log.md"
+        assert correct.exists(), "FAIL: 파일이 올바른 위치로 옮겨지지 않음"
+        assert not wrong.exists(), "FAIL: 잘못된 디렉터리가 정리되지 않음"
+        assert notified, "FAIL: 복구 사실이 notify 되지 않음"
+
+        # 잘못된 워크스페이스가 없는 정상 케이스는 아무 일도 하지 않아야 함
+        notified.clear()
+        _reconcile_misplaced_workspace(team_root, "다른-슬러그", notified.append)
+        assert not notified, "FAIL: 정상 케이스에서 불필요하게 notify 됨"
+
+    print("  _reconcile_misplaced_workspace 이동/정리/notify  OK")
+
 # --- opencode CLI 존재 확인 ---
 def test_opencode():
     result = subprocess.run(["opencode", "--version"], capture_output=True, text=True)
@@ -97,7 +124,10 @@ def main():
     print("\n[4] 명령 감지 (_is_command)")
     test_is_command()
 
-    print("\n[5] opencode CLI")
+    print("\n[5] 워크스페이스 오배치 복구 (_reconcile_misplaced_workspace)")
+    test_reconcile_misplaced_workspace()
+
+    print("\n[6] opencode CLI")
     test_opencode()
 
     print("\n=== 모든 테스트 통과 ===")

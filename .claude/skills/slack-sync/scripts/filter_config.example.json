@@ -1,0 +1,4 @@
+{
+  "channels": ["#example-channel"],
+  "reaction_tags": ["결정", "공유"]
+}

@@ -68,15 +68,21 @@ AUTO 모드에서는 아래 인터럽트 포인트를 모두 자동 처리한다
 동점 발생 시 `team-config.yaml`의 `task.types` 나열 순서를 기준으로 자동 선택.
 `auto-log.md`에 동점 후보 목록과 선택 결과 기록.
 
-**④ Phase 3 Review — 직접수정 기준 완화**
+**④ 보고서 등급 확인 (Phase 1-0-1)**
+위 "인터랙티브 승인(Slack 버튼)" 절차로 등급(1/2/3단계)을 묻고 클릭 응답을 기다린다. 응답이 오면
+그 등급을 사용한다. **타임아웃**되면 다른 승인 지점과 달리 보류하지 않고 `task.report_grade.default`
+(기본값 2단계)로 즉시 진행한다 — 리스크 게이트가 아니라 품질 선호도 확인이므로 파이프라인을 세우지
+않는다. `auto-log.md`에 "④ 보고서 등급 — {선택/타임아웃-기본값 2단계}" 기록.
+
+**⑤ Phase 3 Review — 직접수정 기준 완화**
 AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 30% 초과 시 REASSIGN (멤버 재실행). 목표: 재호출 최소화.
 
-**⑤ Phase 4 품질 미충족 재실행**
+**⑥ Phase 4 품질 미충족 재실행**
 `max_cycles` 이내면 사용자 확인 없이 자동 재실행.
 `auto-log.md`에 재실행 사유 기록.
 
-**⑥ human_approval 게이트 (Termination Protocol)**
+**⑦ human_approval 게이트 (Termination Protocol)**
 자동 승인. 즉시 Phase 5 진입.
 **예외**: `termination.high_risk_override_enabled: true` 이고 아래 둘 중 하나라도 해당하면 이 규칙을
 적용하지 않는다 — Phase 5 중 **Notion(5-1)을 제외한** 나머지 엔드포인트(Slack 등)는 자동 실행하지 않고,
@@ -95,16 +101,16 @@ AUTO 모드에서 직접수정(EDIT) 기준: 수정량 30% 이하.
 Notion 저장(5-1)은 이 override 와 무관하게 `distribution.notion.enabled: true` 면 항상 실행한다
 (아래 "경영전략실 고위험 task type 특별 처리 규칙" 3번의 Notion 예외, Phase 5 참조).
 
-**⑦ 에스컬레이션 (파일 없음, 감지 실패 등)**
+**⑧ 에스컬레이션 (파일 없음, 감지 실패 등)**
 에러 내용을 stdout으로 출력 (slack-bridge가 Slack 스레드에 자동 중계).
 대기하지 않고 현재 최선 버전으로 계속 진행.
 `auto-log.md`에 에스컬레이션 사유와 대응 기록.
 
-**⑧ Phase 5 Distribution**
+**⑨ Phase 5 Distribution**
 `enabled: true` 인 모든 엔드포인트 즉시 실행.
 각 결과를 `auto-log.md`에 추가 기록.
 
-**⑨ Phase 6 — 신규 에이전트 제안**
+**⑩ Phase 6 — 신규 에이전트 제안**
 Phase 6 자가진단에서 "에이전트 갭"(과부하)이 감지돼도 AUTO 모드에서는 **team-config.yaml에 신규
 member를 자동으로 추가하지 않는다** — human_approval 설정과 무관하게 항상 사람 승인이 필요하다. 아래
 "인터랙티브 승인(Slack 버튼)" 절차로 "🆕 신규 에이전트 제안 — {제안 요약} — 반영할까요?" 버튼을 보내고
@@ -237,26 +243,88 @@ Quick Query 로 판별되면 `.claude/skills/quick-query/SKILL.md` 의 절차를
 - `pr-crisis` (고위험): iota · beta · gamma
 - `mgmt-planning`: alpha · delta · beta
 - `strategy-newbiz`: gamma · alpha · delta · beta
+- `product-planning`: alpha · gamma · delta · beta
+
+### 1-0-1. 보고서 등급 확인
+1-0 에서 선택된 task type 이 `team-config.yaml` 의 `task.report_grade.excluded_task_types`
+(`dev`/`code-review` — 보고서·기획안 성격이 약함)에 속하면 이 단계를 건너뛰고 바로 1-1로 진행한다.
+그 외 모든 type 은 아래를 실행한다.
+
+`task.report_grade.levels` 에 정의된 3개 등급(1단계 간단한 형식 / 2단계 일반적인 수준 / 3단계
+논문 수준) 중 하나를 **항상 사용자에게 직접 확인**한다 — task type 처럼 트리거 키워드로 자동
+판별하지 않는다(등급은 산출물의 깊이·분량을 크게 바꾸는 선택이라 추측 대신 매번 확인이 원칙).
+
+- **대화형 세션**: "이번 보고서/기획안은 어느 등급으로 작성할까요? 1단계(간단한 형식) /
+  2단계(일반적인 수준) / 3단계(논문 수준)"을 자연스러운 대화로 묻고, 답변을 받을 때까지 1-1 진입을
+  보류한다. 사용자가 등급을 명시하지 않고 다른 지시만 준 경우, 2단계를 기본값으로 제안하고 확인만
+  받는다.
+- **Slack/AUTO 경로**: 위 "인터랙티브 승인(Slack 버튼)" 절차로 등급을 묻는다:
+  ```
+  python scripts/slack_approval.py --channel "{채널}" \
+    --question "이번 보고서/기획안은 어느 등급으로 작성할까요?" \
+    --options "1단계(간단한 형식),2단계(일반적인 수준),3단계(논문 수준)"
+  ```
+  **타임아웃**되면 human_approval override 등 다른 인터랙티브 승인 지점과 달리 "보류"하지 않고
+  `task.report_grade.default`(기본값 2단계)로 즉시 진행한다 — 등급 선택은 외부 노출·리스크를 막는
+  안전 게이트가 아니라 품질 선호도 확인이므로, 파이프라인 전체를 세우기보다 합리적 기본값으로 계속
+  진행하는 쪽이 낫다. `auto-log.md`에 "④ 보고서 등급 — {선택/타임아웃-기본값 2단계}" 기록.
+
+결정된 등급을 `WS/plan.md`에 한 줄로 기록한다: "선택된 보고서 등급: {level}단계 ({label})". 이
+등급은 1-1 assignment 작성 시 각 멤버(alpha·gamma·delta·beta) 지침에 반영하고(해당 등급의
+`description`을 지시문에 포함해 조사 깊이·검증 강도·시각자료 밀도·서술 분량을 조정), Phase 4 최종
+산출물 메타데이터 헤더에도 포함한다.
+
+### 기획성 타입 공통 규칙 (Stage-Gate 프레임워크)
+`design`/`github-plan`/`mgmt-planning`/`strategy-newbiz`/`product-planning` — "기획/설계" 성격의
+task type 은 아래 원칙을 공유한다(`product-planning` 이 이 패턴의 원형이며, 메커니즘은 `.claude/
+skills/product-planning-framework/SKILL.md` 참조):
+- assignment 를 고정된 STEP 단위로 쪼갠다. 정확한 STEP 구성·담당은 type 마다 다르며, 각 type
+  섹션의 표를 따른다(임의로 STEP을 합치거나 순서를 바꾸지 않음).
+- 각 STEP 완료 시 `WS/plan.md`(또는 `WS/review-log.md`)에 "STEP{n} Gate Review: PASS/FAIL — 근거"
+  한 줄을 기록한다.
+- FAIL이면 다음 STEP으로 진행하지 않고 해당 STEP 담당 멤버에게 REASSIGN한다.
+- 모든 STEP이 PASS해야 Phase 4 통합으로 넘어간다.
 
 ### github-plan 타입의 특별 처리 규칙
-**매우 중요**: `github-plan` 타입이 감지되면 **반드시** 다음 선행 단계를 거쳐야 합니다:
+**매우 중요**: `github-plan` 타입이 감지되면 위 공통 규칙에 따라 **반드시** 아래 순서로 STEP을
+거쳐야 합니다(순서를 건너뛰거나 병렬화하지 않음):
 
-1. **Member-eta**(GitHub Researcher) 선행 실행
-   - GitHub에서 관련 오픈소스 레포지토리 5 개 이상 검색
-   - 각 레포의 라이선스 (MIT/Apache/GPL/BSL 등) 감사
-   - 주요 기능과 아키텍처 분석
-   - 표절 위험이 있는 코드 스니펫 식별
+| STEP | 담당 | 내용 |
+|---|---|---|
+| STEP1 OSS 리서치 | Member-eta | GitHub 오픈소스 레포 5개 이상 검색·라이선스(MIT/Apache/GPL/BSL 등) 감사·주요 기능·아키텍처 분석·표절 위험 코드 스니펫 식별 |
+| STEP2 구현방향 분석 | Member-alpha | Eta 보고서 기반 구현 방향성 분석, 참조 기능 vs 독자 구현 구분, 라이선스 리스크 시 대안 제시 |
+| STEP3 계획서 작성 | Member-beta | 구현 로드맵 작성, 오픈소스 참조 범위 명문화 |
 
-2. **Member-alpha** (분석) - 2 차 분석
-   - Eta 의 보고서를 바탕으로 구현 방향성 분석
-   - 어떤 기능을 참조하고 어떤 기능을 독창적으로 구현할지 제안
-   - 라이선스 리스크가 있는 경우 대안 제시
+위 STEP을 거치지 않은 `github-plan` 타입 작업은 **규약 위반**입니다.
 
-3. **Member-beta** (보고서) - 최종 계획서
-   - 앞선 분석을 종합하여 구현 로드맵 작성
-   - 어떤 오픈소스를 얼마나 참조할지 명문화
+### design 타입의 특별 처리 규칙
+`design` 타입은 위 공통 규칙에 따라 아래 STEP으로 진행합니다:
 
-위 단계를 거치지 않은 `github-plan` 타입 작업은 **규약 위반**입니다.
+| STEP | 담당 | 내용 |
+|---|---|---|
+| STEP1 리서치 | Member-alpha | 사전 리서치·현황 분석 |
+| STEP2 설계 | Member-zeta | 인터뷰 진행 후 통합 설계서(design-spec.md) 작성 |
+| STEP3 검증(Gate) | Member-zeta | 설계서의 "작업 컨텍스트·워크플로우 정의·구현 스펙" 세 섹션이 서로 정합적인지 자체 점검 |
+
+### mgmt-planning 타입의 특별 처리 규칙
+`mgmt-planning` 타입은 위 공통 규칙에 따라 아래 STEP으로 진행합니다:
+
+| STEP | 담당 | 내용 |
+|---|---|---|
+| STEP1 현황분석 | Member-alpha | 경영실적·예산 현황 분석 |
+| STEP2 목표·계획 수립 | Member-alpha | KPI 설정·예산·실행계획 초안 |
+| STEP3 자료화 | Member-delta | KPI·이사회 자료 표·시각화 |
+| STEP4 검증(Gate) | Member-beta | 경영보고서 정합성·리스크 점검 후 작성 |
+
+### strategy-newbiz 타입의 특별 처리 규칙
+`strategy-newbiz` 타입은 위 공통 규칙에 따라 아래 STEP으로 진행합니다:
+
+| STEP | 담당 | 내용 |
+|---|---|---|
+| STEP1 환경분석 | Member-gamma | 경쟁사·시장 동향 원문 수집 |
+| STEP2 타당성분석 | Member-alpha | 포트폴리오·Feasibility 분석 |
+| STEP3 설계 | Member-delta | 전략 옵션 비교 시각화 |
+| STEP4 검증(Gate) | Member-beta | 전략보고서 정합성·리스크 점검 후 작성 |
 
 ### dev 타입의 특별 처리 규칙
 **매우 중요**: `dev` 타입이 감지되면 **반드시** 다음 선행 단계를 거쳐야 합니다:
@@ -275,6 +343,21 @@ Quick Query 로 판별되면 `.claude/skills/quick-query/SKILL.md` 의 절차를
    - 자체 검증 후 배포
 
 위 단계를 거치지 않은 `dev` 타입 작업은 **규약 위반**입니다.
+
+### product-planning 타입의 특별 처리 규칙
+`product-planning` 타입은 위 공통 규칙의 원형으로, `.claude/skills/product-planning-framework/
+SKILL.md`의 IP 융합 신제품기획 5단계를 **반드시** 그대로 따릅니다(임의로 단계를 합치거나 순서를
+바꾸지 않음):
+
+| STEP | 세부활동 | 담당 |
+|---|---|---|
+| STEP1 고객환경분석 | 제품/니즈 분석·보유·동종 특허 분석·환경분석·프로젝트 정의 | alpha |
+| STEP2 고객가치분석 | 고객 경험 조사·JTBD 분석·목표고객 선정·고객가치 제안 | alpha(분석) + gamma(고객조사 원천자료 검증) |
+| STEP3 신제품기획 | 프롬프트 구성·IP융합 특허 분석·IP융합 특허 선정·신제품기획 | alpha |
+| STEP4 경제가치설계 | 기업이 할 일·BM설계·실행계획 수립·IP전략 수립 | delta(시각화) + beta(초안 정리) |
+| STEP5 검증 | 사업타당성 검토·가설검증·IP검증(FTO)·시장검증(CRM) | gamma(검증) + beta(최종보고서) |
+
+위 STEP을 거치지 않은 `product-planning` 타입 작업은 **규약 위반**입니다.
 
 ### 경영전략실 고위험 task type 특별 처리 규칙
 **매우 중요**: `ir-relations` / `gr-policy` / `pr-crisis` 는 실제로 투자자·정부·언론 등 **외부로 나갈 수 있는
@@ -336,10 +419,13 @@ task type으로 "전사 손익 조회"를 처리해도, ERP 대시보드 데이�
 ### 1-1. Task 분해
 1. Analyze the user task description.
 2. Decompose the task into assignments matching each **활성 멤버**'s role (비활성 멤버에게는 작업을 배정하지 않음).
+   1-0-1 에서 등급이 확인된 경우, 각 멤버 assignment 지시문에 해당 등급의 `report_grade.levels[N].description`
+   을 포함시켜 조사 깊이(alpha)·검증 강도(gamma)·시각자료 밀도(delta)·서술 분량과 구조(beta)를 등급에 맞춘다.
 3. Determine execution order and dependencies.
 4. Produce `WS/plan.md` with:
    - task summary
    - **선택된 task type** 및 근거 (매칭된 trigger 또는 태그)
+   - **선택된 보고서 등급** (해당 시, 1-0-1 참조)
    - **활성 멤버 목록**
    - assignments
    - execution order
@@ -435,6 +521,8 @@ Record results (3-0 검증 결과 + 3-1 판정 원문 요약) in `WS/review-log.
   ```
   **작성일**: {YYYY-MM-DD}
   **Task Type**: {선택된 task type}
+  **보고서 등급**: {1-0-1에서 결정된 등급, 예: "2단계 (일반적인 수준)" — 등급 적용 대상 task type이
+    아니면(`task.report_grade.excluded_task_types`) 이 줄은 생략}
   **활성 멤버**: {활성 멤버를 " · " 로 연결, 이름 옆에 대표 업무를 괄호로 표기("Team Members Quick
     Reference" 표의 라벨 사용) — 예: alpha(조사) · gamma(팩트체크) · delta(시각화) · beta(보고서)}
   **사이클**: {현재 통합 사이클} / {termination.max_cycles}
@@ -592,7 +680,7 @@ Phase 5 직후(또는 Phase 5 가 스킵/보류됐다면 Termination Protocol �
 3. **대화형 세션**: 제안 내용을 사용자에게 제시하고 승인을 기다린다. 승인 전에는 `team-config.yaml`·
    `.claude/agents/` 를 수정하지 않는다. 승인되면 `team-config.yaml` 에 신규 member 블록을 추가하고,
    `.claude/agents/member-{name}/AGENT.md` 를 작성하고, 필요한 skill 문서를 만든다.
-4. **AUTO 모드**: 절대 즉시 반영하지 않는다 — "AUTO 모드 인터럽트 처리 규칙 ⑨" 참조. 위 "인터랙티브
+4. **AUTO 모드**: 절대 즉시 반영하지 않는다 — "AUTO 모드 인터럽트 처리 규칙 ⑩" 참조. 위 "인터랙티브
    승인(Slack 버튼)" 절차로 제안 요약과 함께 버튼을 보내고 클릭 응답을 기다린다. 승인되면 그 자리에서
    반영, 거부/타임아웃되면 반영하지 않고 보류한다(타임아웃 시 최종 안전장치는 여전히 사람의 수동 승인).
 5. 거절되거나 보류되면 `WS/retrospective.md` 에 판단 결과를 기록하고 그대로 종료한다(제안을 이유로
@@ -624,6 +712,7 @@ slug: {slug}
 | HH:MM | ① 슬러그      | 자동 확정         | human_approval:false |
 | HH:MM | ② 재사용      | 신규 탐색         | 유사 slug 없음        |
 | HH:MM | ③ task type   | research-report  | score 0.5 (1위)      |
+| HH:MM | ④ 보고서 등급  | 2단계 (일반적인 수준) | Slack 승인 응답      |
 
 ## Phase 진행
 | Phase | 시작  | 완료  | 결과                |
@@ -668,6 +757,25 @@ check_task_ownership_sync.py`)은 기계적으로 정확성을 검증할 수 없
 실패하면, 일반적인 커밋 실패가 아니라 이 동기화 검사가 막은 것이다 — `--no-verify`로 무시하지
 말고 누락된 쪽 파일을 함께 갱신하거나 사용자에게 에스컬레이션한다.
 
+## API 연동 현황 문서(Notion) 최신화
+이 리포지토리의 "API 연동 현황"(사내 부서 대시보드·타 부서/자사 Notion·Slack·GitHub·SQL 게이트웨이
+등 외부 연동 전체 목록)은 Notion 페이지
+[API 연동 현황](https://app.notion.com/p/barogohq/3c0363ae08db8057ad20c59c70fe109c)(경영전략실 ›
+아카이브 › OpenCode Agent 하위)에 정리돼 있다. 아래 파일 중 하나라도 바꾸는 작업을 마치면 같은
+세션에서 이 페이지도 함께 갱신한다(나중으로 미루지 않는다):
+- `team-config.yaml`의 `external_data_sources` / `distribution` 섹션
+- `.claude/skills/dept-dashboard-reader`, `dept-notion-reader`, `sql-reader`, `github-researcher`,
+  `notion-sync`, `slack-sync`의 `SKILL.md`
+- `slack-bridge/.env.example`(토큰/키 env 추가·제거)
+
+갱신 방법: Notion MCP 커넥터가 있는 환경(대화형 세션)이면 `notion-fetch`로 현재 내용을 먼저 확인한
+뒤 `notion-update-page`(`update_content`/`replace_content`)로 바뀐 부분만 고친다. MCP가 없는
+환경(opencode 서브프로세스 등)은 `scripts/notion_publish.py`로 기존 페이지를 그 자리에서 편집할
+수 없으므로, 변경 내용을 `auto-log.md`/사용자 보고에 남기고 다음 대화형 세션에서 반영한다.
+
+이 동기화는 위 Git Pre-commit Hook처럼 기계적으로 강제되지 않는다(커밋 시점에 Notion 상태를 조회할
+방법이 없음) — 관련 파일을 고칠 때마다 이 절을 참조해 직접 챙기는 관례로 유지한다.
+
 ## Skills Reference
 아래는 팀장이 참조하는 스킬 번들이다. `Skill` 도구가 있는 환경(대화형 Claude Code 세션)에서는 그것으로
 호출하고, 없는 환경(opencode 서브프로세스 등 — 운영 환경 기본값)에서는 `Read`/`Bash` 로 해당 `SKILL.md`
@@ -675,16 +783,51 @@ check_task_ownership_sync.py`)은 기계적으로 정확성을 검증할 수 없
 적용된다.
 
 - `task-planner` → `.claude/skills/task-planner/SKILL.md`
+- `product-planning-framework` → `.claude/skills/product-planning-framework/SKILL.md` (`product-planning`
+  타입일 때 Phase 1-1 에서 참조)
 - `artifact-reviewer` → `.claude/skills/artifact-reviewer/SKILL.md`
 - `integrator` → `.claude/skills/integrator/SKILL.md`
 - `quick-query` → `.claude/skills/quick-query/SKILL.md` (Phase 0 에서 Quick Query 로 판별됐을 때)
 - `shared/file-io` → `.claude/skills/shared/file-io/SKILL.md`
 - `shared/data-parser` → `.claude/skills/shared/data-parser/SKILL.md`
+- `shared/knowledge-lib` → `.claude/skills/shared/knowledge-lib/SKILL.md` (지식수집 스킬 공용 유틸)
+- `notion-sync` / `slack-sync` / `file-watcher` / `web-clipper` / `note-structurer` / `knowledge-query` /
+  `knowledge-research` → 아래 "Knowledge Pipeline" 절 참고
 
 `fewer-permission-prompts` 는 `.claude/skills/` 에 실체가 없는 **Claude Code 전용 내장 스킬**이다
 (Claude Code 자체 트랜스크립트를 스캔해 `settings.json` 권한 allowlist 를 조정하는 기능으로, opencode
 서브프로세스에는 대응 기능이 없다). `team-config.yaml` 의 `team.lead.skills` 목록에는 남아있지만,
 opencode 환경에서는 스킵한다.
+
+## Knowledge Pipeline (지식 수집·구조화)
+
+지식수집_구조화_에이전트_설계서.md(Obsidian Vault 루트) 근거. Notion/Slack/로컬 파일/웹에서
+정보를 모아 vault를 지식 소스로 상시 유지하고, 멤버가 조회·리서치할 수 있게 하는 스킬 묶음이다.
+별도 프로젝트나 상주 MCP 서버가 아니라 이 agent-team의 스킬로 통합돼 있다.
+
+**vault 연결 정보**: Obsidian Local REST API 플러그인 경유 — vault **쓰기**(수집 단계: notion-sync/
+slack-sync/file-watcher/web-clipper/note-structurer)는 Obsidian 앱이 켜져 있어야 한다. vault
+**조회**(`knowledge-query`)는 파일시스템을 직접 읽으므로 Obsidian 실행 여부와 무관하게 항상 된다.
+
+**배치 스케줄**: `notion-sync`/`slack-sync`/`file-watcher`/`note-structurer`는 지민님이 **Windows
+작업 스케줄러**에 직접 등록(각 스크립트를 트리거)하는 것으로 확정했다(2026-08-13 — 당초 설계서 3-2절
+"Claude Code 내장 cron" 안에서 정정). `config/knowledge_pipeline.json`의 `batch_times`는 이 Windows
+작업 스케줄러 등록 시각과 실제로 일치해야 문서-실행이 어긋나지 않는다. **`schedule` 스킬/`CronCreate`
+로 같은 작업을 중복 등록하지 않는다** — 이미 Windows 작업 스케줄러가 트리거를 담당하므로, Claude Code
+cron까지 등록하면 같은 배치가 두 번 돌아 vault에 중복 노트가 쌓일 수 있다:
+- `notion-sync` / `slack-sync`: 10~15분 주기
+- `file-watcher`: 5분 내외 짧은 주기
+- `note-structurer`: 1일 1~2회, 또는 `00_Inbox` 누적량이 threshold를 넘을 때
+
+**조회/리서치 사용 규칙**:
+- 어떤 멤버든 vault 참조가 필요하면 `knowledge-query`를 먼저 호출한다(비용 거의 없음).
+- `knowledge-query`로 부족할 때만 `knowledge-research`를 호출한다 — 일 단위 quota 하드캡이 있다
+  (한도는 `.claude/skills/knowledge-research/SKILL.md` 참고, 실제 숫자는 미정 — README 참고).
+- `knowledge-research`가 기동하는 리서치 서브에이전트는 **`knowledge-research` 스킬 경유로만**
+  띄운다. 멤버가 임의로 `Agent` 도구를 써서 즉흥적으로 리서치 서브에이전트를 기동하지 않는다 —
+  quota 카운트가 새 나간다.
+- `note-structurer` 배치가 도는 동안 `knowledge-query`/`knowledge-research`는 최대 30초 대기 후
+  `vault_busy`를 반환할 수 있다 — 받으면 잠시 후 재시도한다.
 
 ## Team Members Quick Reference
 영어 이름만으로는 구분이 어려우므로, 멤버 이름 옆에 대표 업무를 괄호로 표기한다(예: `alpha(조사)`).
@@ -694,9 +837,9 @@ opencode 환경에서는 스킵한다.
 | 멤버 | 역할 | 주 산출물 | 주 용도 |
 |---|---|---|---|
 | member-alpha (조사) | 시장 조사·데이터 분석 + 외부 데이터소스(타 부서 Notion·사내 부서별 대시보드 API) 조회 | `analysis-report.md` | 모든 type |
-| member-beta (보고서) | 보고서 초안 작성 | `draft-report.md` | research-report · code-review · multilingual-brief · gr-policy · pr-crisis · ir-relations · mgmt-planning · strategy-newbiz |
-| member-gamma (팩트체크) | 팩트체커 (WebSearch/WebFetch) | `fact-check-log.md` | research-report · code-review · pr-crisis · ir-relations(원천수집) · strategy-newbiz(원천수집) |
-| member-delta (시각화) | 시각화 (Mermaid·테이블) | `visuals.md` | research-report · multilingual-brief · ir-relations · mgmt-planning |
+| member-beta (보고서) | 보고서 초안 작성 | `draft-report.md` | research-report · code-review · multilingual-brief · gr-policy · pr-crisis · ir-relations · mgmt-planning · strategy-newbiz · product-planning |
+| member-gamma (팩트체크) | 팩트체커 (WebSearch/WebFetch) | `fact-check-log.md` | research-report · code-review · pr-crisis · ir-relations(원천수집) · strategy-newbiz(원천수집) · product-planning(고객조사·시장검증) |
+| member-delta (시각화) | 시각화 (Mermaid·테이블) | `visuals.md` | research-report · multilingual-brief · ir-relations · mgmt-planning · product-planning |
 | member-epsilon (개발) | Dev Agent (코드 수정·검증·배포) | `dev-log.md` | dev |
 | member-zeta (설계) | 개발 설계 (에이전트 설계서) | `design-spec.md` | design |
 | member-eta (OSS리서치) | GitHub Researcher (gh CLI 탐색·라이선스 감사) | `github-research-report.md` | github-plan |

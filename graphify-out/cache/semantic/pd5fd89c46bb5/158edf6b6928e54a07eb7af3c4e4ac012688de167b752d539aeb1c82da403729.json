@@ -1,0 +1,1 @@
+{"nodes": [{"id": "claude_skills_shared_file_io_skill", "label": "Shared File I/O Skill", "file_type": "document", "source_file": ".claude/skills/shared/file-io/SKILL.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

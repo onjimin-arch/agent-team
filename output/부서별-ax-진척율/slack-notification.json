@@ -1,0 +1,18 @@
+{
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*부서별 AX 진척율 분석*\n- 후속 반영: 2026-08-19 10:11 지시 기준 재조회본\n- 재조회 상태: AX `cases` / `reports` / `departments` 성공\n- 핵심 포인트: 법무실 47.8%, 물류운영사업부 40.0%가 상위권이고, 현장총괄본부는 진척률 23.3%지만 절감 가능 시간 2,135.2시간으로 영향도 1위\n- 추가 포인트: 경영지원실_피플팀은 `AX진행/7월 인원 4.60`으로 인원 대비 실행 밀도 최고"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Notion*: https://app.notion.com/p/AX-2026-08-19-3c1363ae08db813ea649cd1c94368206"
+      }
+    }
+  ]
+}

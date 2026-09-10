@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -106,6 +107,8 @@ def run_team_lead(
         topic_slug, task_description, team_root, notify, notify_progress, cancel_event, follow_up
     )
 
+    _reconcile_misplaced_workspace(team_root, topic_slug, notify)
+
     cancelled = bool(cancel_event and cancel_event.is_set())
     final_path = workspace / "final" / "final-artifact.md"
     # Quick Query 경로(CLAUDE.md Phase 0 → Quick Query Protocol)는 풀 파이프라인을 타지 않으므로
@@ -131,6 +134,34 @@ def run_team_lead(
         "follow_up": follow_up,
         **result,
     }
+
+
+def _reconcile_misplaced_workspace(team_root: Path, topic_slug: str, notify: Callable[[str], None]) -> None:
+    """opencode 가 프로젝트 루트를 `slack-bridge/` 로 잘못 인식해 워크스페이스 산출물을
+    `slack-bridge/output/{slug}/` 밑에 저장하는 경우가 있다 (2026-08-14 `커넥트운영팀-실적`
+    실사례 — opencode 자체의 서브프로젝트 자동 인식 버그로 추정, 원인 불명). final_path/
+    quick_query_log 존재 여부로 완료 판정하기 전에 감지해서 옮겨야 "부분 완료" 오분류를 막는다."""
+    wrong = team_root / "slack-bridge" / "output" / topic_slug
+    if not wrong.is_dir():
+        return
+    correct = team_root / "output" / topic_slug
+    correct.mkdir(parents=True, exist_ok=True)
+    moved = []
+    for item in wrong.iterdir():
+        dest = correct / item.name
+        if dest.exists():
+            continue
+        shutil.move(str(item), str(dest))
+        moved.append(item.name)
+    try:
+        next(wrong.iterdir())
+    except StopIteration:
+        wrong.rmdir()
+    if moved:
+        notify(
+            f"⚠️ opencode가 워크스페이스를 `slack-bridge/output/{topic_slug}/`에 잘못 저장한 것을 "
+            f"감지해 `output/{topic_slug}/`로 옮겼습니다: {', '.join(moved)}"
+        )
 
 
 def _run_subprocess(
